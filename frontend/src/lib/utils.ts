@@ -48,6 +48,14 @@ export const CATEGORY_LABELS: Record<string, string> = {
   mental: "Mental Game",
 };
 
+export const CATEGORY_BADGE_VARIANTS: Record<string, "green" | "blue" | "yellow" | "purple" | "red" | "default"> = {
+  driving: "green",
+  putting: "blue",
+  chipping: "yellow",
+  iron: "purple",
+  mental: "red",
+};
+
 export const DIFFICULTY_COLORS: Record<string, string> = {
   beginner: "bg-green-100 text-green-800",
   intermediate: "bg-yellow-100 text-yellow-800",

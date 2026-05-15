@@ -8,7 +8,7 @@ import { PageHeader } from "../components/PageHeader";
 import { Badge } from "../components/Badge";
 import { Card } from "../components/Card";
 import { Button } from "../components/Button";
-import { CATEGORY_LABELS, DIFFICULTY_COLORS } from "../lib/utils";
+import { CATEGORY_LABELS, DIFFICULTY_COLORS, CATEGORY_BADGE_VARIANTS } from "../lib/utils";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
@@ -149,7 +149,7 @@ export function ExerciseDetailPage() {
 
         {/* Meta */}
         <div className="flex items-center gap-2 flex-wrap">
-          <Badge variant="green">{CATEGORY_LABELS[exercise.category] ?? exercise.category}</Badge>
+          <Badge variant={CATEGORY_BADGE_VARIANTS[exercise.category] ?? "default"}>{CATEGORY_LABELS[exercise.category] ?? exercise.category}</Badge>
           <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${DIFFICULTY_COLORS[exercise.difficulty]}`}>
             {exercise.difficulty}
           </span>

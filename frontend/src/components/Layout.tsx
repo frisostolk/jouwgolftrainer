@@ -16,7 +16,7 @@ export function Layout() {
 
   return (
     <div className="flex flex-col min-h-screen min-h-dvh bg-gray-50">
-      <main className="flex-1 overflow-y-auto pb-20">
+      <main className="flex-1 overflow-y-auto pb-nav">
         <Outlet />
       </main>
 

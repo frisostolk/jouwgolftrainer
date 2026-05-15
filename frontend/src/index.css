@@ -28,6 +28,11 @@
     padding-bottom: max(1rem, env(safe-area-inset-bottom)) !important;
   }
 
+  /* Main content padding — clears the tab bar (3.5rem) + safe area */
+  .pb-nav {
+    padding-bottom: calc(3.5rem + max(1rem, env(safe-area-inset-bottom)));
+  }
+
   .pt-safe {
     padding-top: env(safe-area-inset-top);
   }

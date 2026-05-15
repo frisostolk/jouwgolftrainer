@@ -9,7 +9,7 @@ import { Badge } from "../components/Badge";
 import { Button } from "../components/Button";
 import { EmptyState } from "../components/EmptyState";
 import { Dumbbell } from "lucide-react";
-import { CATEGORY_LABELS, DIFFICULTY_COLORS } from "../lib/utils";
+import { CATEGORY_LABELS, DIFFICULTY_COLORS, CATEGORY_BADGE_VARIANTS } from "../lib/utils";
 import type { Exercise } from "../types";
 
 const CATEGORIES = ["all", "driving", "putting", "chipping", "iron", "mental"];
@@ -298,7 +298,7 @@ function ExerciseCard({ exercise, label, onClick }: { exercise: Exercise; label?
       <div className="flex-1 min-w-0">
         <h3 className="font-semibold text-gray-900 text-sm truncate">{exercise.title}</h3>
         <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-          <Badge variant="green">{CATEGORY_LABELS[exercise.category] ?? exercise.category}</Badge>
+          <Badge variant={CATEGORY_BADGE_VARIANTS[exercise.category] ?? "default"}>{CATEGORY_LABELS[exercise.category] ?? exercise.category}</Badge>
           <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${DIFFICULTY_COLORS[exercise.difficulty]}`}>
             {exercise.difficulty}
           </span>
