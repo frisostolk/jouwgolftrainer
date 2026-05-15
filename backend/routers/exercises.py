@@ -154,6 +154,33 @@ async def delete_exercise(
     await db.delete(exercise)
 
 
+@router.get("/{exercise_id}/history")
+async def exercise_history(
+    exercise_id: int,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(SessionExercise, TrainingSession.created_at.label("logged_at"))
+        .join(TrainingSession, TrainingSession.id == SessionExercise.session_id)
+        .where(
+            SessionExercise.exercise_id == exercise_id,
+            TrainingSession.user_id == user.id,
+        )
+        .order_by(TrainingSession.created_at.asc())
+        .limit(30)
+    )
+    rows = result.all()
+    return [
+        {
+            "date": logged_at.strftime("%d %b"),
+            "score": se.score,
+            "scoring_data": se.scoring_data or {},
+        }
+        for se, logged_at in rows
+    ]
+
+
 @router.post("/{exercise_id}/log", response_model=SessionResponse, status_code=201)
 async def log_exercise(
     exercise_id: int,

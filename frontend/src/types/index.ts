@@ -109,6 +109,12 @@ export interface CoachNote {
   coach: User;
 }
 
+export interface ExerciseHistoryPoint {
+  date: string;
+  score?: number;
+  scoring_data: Record<string, number>;
+}
+
 export interface WeeklyStats {
   week: string;
   sessions: number;

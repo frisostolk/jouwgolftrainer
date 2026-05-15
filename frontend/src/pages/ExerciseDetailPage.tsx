@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Play, Clock, Tag, CheckCircle, UserPlus } from "lucide-react";
-import { useExercise, useLogExercise } from "../hooks/useExercises";
+import { Play, Clock, Tag, CheckCircle, UserPlus, Pencil } from "lucide-react";
+import { useExercise, useLogExercise, useUpdateExercise, useExerciseHistory } from "../hooks/useExercises";
 import { useConnections, useAssignExercise } from "../hooks/useConnections";
 import { useAuth } from "../context/AuthContext";
 import { PageHeader } from "../components/PageHeader";
@@ -9,16 +9,23 @@ import { Badge } from "../components/Badge";
 import { Card } from "../components/Card";
 import { Button } from "../components/Button";
 import { CATEGORY_LABELS, DIFFICULTY_COLORS } from "../lib/utils";
-import type { Connection } from "../types";
+import {
+  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
+} from "recharts";
+import type { Connection, Exercise } from "../types";
+
+const CHART_COLORS = ["#15803d", "#2563eb", "#d97706", "#dc2626", "#7c3aed", "#0891b2"];
 
 export function ExerciseDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { isCoach } = useAuth();
+  const { isCoach, isSuperuser, user } = useAuth();
   const { data: exercise, isLoading } = useExercise(Number(id));
   const { mutateAsync: logExercise, isPending } = useLogExercise();
+  const { mutateAsync: updateExercise, isPending: updating } = useUpdateExercise();
   const { data: connections } = useConnections();
   const { mutateAsync: assignExercise, isPending: assigning } = useAssignExercise();
+  const { data: history = [] } = useExerciseHistory(Number(id));
 
   const [showLogForm, setShowLogForm] = useState(false);
   const [notes, setNotes] = useState("");
@@ -31,9 +38,45 @@ export function ExerciseDetailPage() {
   const [assignMsg, setAssignMsg] = useState("");
   const [assigned, setAssigned] = useState(false);
 
+  const [showEdit, setShowEdit] = useState(false);
+  const [editForm, setEditForm] = useState<Partial<Exercise>>({});
+  const [editInstructions, setEditInstructions] = useState("");
+  const [editScoringFields, setEditScoringFields] = useState("");
+
   const connectedPlayers = (connections ?? []).filter(
     (c: Connection) => c.status === "accepted" && c.player_id !== undefined
   );
+
+  const canEdit = exercise && (
+    isSuperuser ||
+    (isCoach && exercise.owner_id === user?.id)
+  );
+
+  const openEdit = () => {
+    if (!exercise) return;
+    setEditForm({
+      title: exercise.title,
+      category: exercise.category,
+      difficulty: exercise.difficulty,
+      duration_minutes: exercise.duration_minutes,
+    });
+    setEditInstructions(exercise.instructions.join("\n"));
+    setEditScoringFields((exercise.scoring_fields ?? []).join("\n"));
+    setShowEdit(true);
+  };
+
+  const handleEdit = async () => {
+    const scoringFields = editScoringFields.split("\n").map((s) => s.trim()).filter(Boolean);
+    await updateExercise({
+      id: Number(id),
+      data: {
+        ...editForm,
+        instructions: editInstructions.split("\n").map((s) => s.trim()).filter(Boolean),
+        scoring_fields: scoringFields.length ? scoringFields : [],
+      },
+    });
+    setShowEdit(false);
+  };
 
   const handleLog = async () => {
     const parsedScoringData: Record<string, number> = {};
@@ -61,6 +104,16 @@ export function ExerciseDetailPage() {
     setAssignMsg("");
   };
 
+  // Build chart data
+  const hasCustomScoring = (exercise?.scoring_fields ?? []).length > 0;
+  const chartLines: string[] = hasCustomScoring
+    ? (exercise?.scoring_fields ?? [])
+    : history.some((h) => h.score != null) ? ["score"] : [];
+  const chartData = history.map((h) => ({
+    date: h.date,
+    ...(hasCustomScoring ? h.scoring_data : { score: h.score }),
+  }));
+
   if (isLoading) return (
     <div className="flex items-center justify-center min-h-screen">
       <div className="animate-spin w-8 h-8 border-4 border-green-600 border-t-transparent rounded-full" />
@@ -70,7 +123,20 @@ export function ExerciseDetailPage() {
 
   return (
     <div>
-      <PageHeader title={exercise.title} back />
+      <PageHeader
+        title={exercise.title}
+        back
+        action={
+          canEdit ? (
+            <button
+              onClick={openEdit}
+              className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center"
+            >
+              <Pencil className="w-4 h-4 text-gray-600" />
+            </button>
+          ) : undefined
+        }
+      />
       <div className="px-4 pt-4 pb-8 space-y-5">
         {/* Hero */}
         {exercise.thumbnail_url ? (
@@ -122,6 +188,32 @@ export function ExerciseDetailPage() {
           )
         )}
 
+        {/* Score history chart */}
+        {chartData.length > 1 && chartLines.length > 0 && (
+          <Card className="p-4">
+            <h2 className="font-semibold text-gray-900 mb-3">Score history</h2>
+            <ResponsiveContainer width="100%" height={180}>
+              <LineChart data={chartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                <XAxis dataKey="date" tick={{ fontSize: 10 }} />
+                <YAxis tick={{ fontSize: 10 }} />
+                <Tooltip />
+                {chartLines.length > 1 && <Legend wrapperStyle={{ fontSize: 11 }} />}
+                {chartLines.map((key, i) => (
+                  <Line
+                    key={key}
+                    type="monotone"
+                    dataKey={key}
+                    stroke={CHART_COLORS[i % CHART_COLORS.length]}
+                    strokeWidth={2}
+                    dot={{ r: 3 }}
+                    connectNulls
+                  />
+                ))}
+              </LineChart>
+            </ResponsiveContainer>
+          </Card>
+        )}
+
         {/* Instructions */}
         {exercise.instructions.length > 0 && (
           <Card className="p-4">
@@ -171,7 +263,6 @@ export function ExerciseDetailPage() {
               <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto" />
               <h3 className="font-semibold text-gray-900">Log "{exercise.title}"</h3>
 
-              {/* Dynamic scoring fields */}
               {(exercise.scoring_fields ?? []).length > 0 && (
                 <div className="space-y-3">
                   <p className="text-sm font-medium text-gray-700">Scores</p>
@@ -262,6 +353,83 @@ export function ExerciseDetailPage() {
               <Button variant="secondary" className="flex-1" onClick={() => setShowAssign(false)}>Cancel</Button>
               <Button className="flex-1" loading={assigning} disabled={!assignPlayer} onClick={handleAssign}>
                 Assign
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit form bottom sheet */}
+      {showEdit && (
+        <div className="fixed inset-0 z-[60] bg-black/50 flex items-end" onClick={() => setShowEdit(false)}>
+          <div className="w-full bg-white rounded-t-3xl flex flex-col max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
+            <div className="overflow-y-auto flex-1 p-6 pb-2 space-y-3">
+              <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto" />
+              <h3 className="font-semibold text-gray-900">Edit Exercise</h3>
+              <div>
+                <label className="text-xs font-medium text-gray-700 block mb-1">Title *</label>
+                <input
+                  value={editForm.title ?? ""}
+                  onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+                  className="w-full rounded-xl border border-gray-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-600"
+                />
+              </div>
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <label className="text-xs font-medium text-gray-700 block mb-1">Category</label>
+                  <select
+                    value={editForm.category ?? "driving"}
+                    onChange={(e) => setEditForm({ ...editForm, category: e.target.value as Exercise["category"] })}
+                    className="w-full rounded-xl border border-gray-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-600"
+                  >
+                    {["driving", "putting", "chipping", "iron", "mental"].map((c) => (
+                      <option key={c} value={c}>{CATEGORY_LABELS[c] ?? c}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex-1">
+                  <label className="text-xs font-medium text-gray-700 block mb-1">Difficulty</label>
+                  <select
+                    value={editForm.difficulty ?? "beginner"}
+                    onChange={(e) => setEditForm({ ...editForm, difficulty: e.target.value as Exercise["difficulty"] })}
+                    className="w-full rounded-xl border border-gray-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-600"
+                  >
+                    {["beginner", "intermediate", "advanced"].map((d) => (
+                      <option key={d} value={d}>{d.charAt(0).toUpperCase() + d.slice(1)}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-700 block mb-1">Duration (minutes)</label>
+                <input
+                  type="number" min={1}
+                  value={editForm.duration_minutes ?? 15}
+                  onChange={(e) => setEditForm({ ...editForm, duration_minutes: parseInt(e.target.value) || 15 })}
+                  className="w-full rounded-xl border border-gray-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-600"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-700 block mb-1">Instructions (one per line)</label>
+                <textarea
+                  rows={3} value={editInstructions}
+                  onChange={(e) => setEditInstructions(e.target.value)}
+                  className="w-full rounded-xl border border-gray-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-600 resize-none font-mono"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-700 block mb-1">Scoring fields (one per line)</label>
+                <textarea
+                  rows={3} value={editScoringFields}
+                  onChange={(e) => setEditScoringFields(e.target.value)}
+                  className="w-full rounded-xl border border-gray-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-600 resize-none font-mono"
+                />
+              </div>
+            </div>
+            <div className="flex gap-3 p-4 pt-3 pb-safe border-t border-gray-100">
+              <Button variant="secondary" className="flex-1" onClick={() => setShowEdit(false)}>Cancel</Button>
+              <Button className="flex-1" loading={updating} disabled={!editForm.title?.trim()} onClick={handleEdit}>
+                Save
               </Button>
             </div>
           </div>

@@ -46,6 +46,14 @@ export function useLogExercise() {
   });
 }
 
+export function useExerciseHistory(id: number) {
+  return useQuery({
+    queryKey: ["exercise-history", id],
+    queryFn: () => exercisesApi.history(id),
+    enabled: !!id,
+  });
+}
+
 export function useDeleteExercise() {
   const qc = useQueryClient();
   return useMutation({

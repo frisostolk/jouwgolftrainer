@@ -1,5 +1,5 @@
 import api from "./client";
-import type { Exercise, TrainingSession } from "../types";
+import type { Exercise, TrainingSession, ExerciseHistoryPoint } from "../types";
 
 export interface LogExercisePayload {
   notes?: string;
@@ -24,6 +24,9 @@ export const exercisesApi = {
 
   update: (id: number, data: Partial<Exercise>) =>
     api.patch<Exercise>(`/exercises/${id}`, data).then((r) => r.data),
+
+  history: (id: number) =>
+    api.get<ExerciseHistoryPoint[]>(`/exercises/${id}/history`).then((r) => r.data),
 
   delete: (id: number) => api.delete(`/exercises/${id}`),
 };
