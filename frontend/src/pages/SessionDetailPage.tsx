@@ -276,7 +276,7 @@ export function SessionDetailPage() {
       {/* Finish session sheet */}
       {showFinish && (
         <div className="fixed inset-0 z-[60] bg-black/50 flex items-end" onClick={() => setShowFinish(false)}>
-          <div className="w-full bg-white rounded-t-3xl flex flex-col max-h-[85vh]" onClick={(e) => e.stopPropagation()}>
+          <div className="w-full bg-white rounded-t-3xl flex flex-col max-h-[85svh]" onClick={(e) => e.stopPropagation()}>
             <div className="overflow-y-auto flex-1 p-6 space-y-4">
               <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto" />
               <h3 className="font-semibold text-gray-900">Finish Session</h3>

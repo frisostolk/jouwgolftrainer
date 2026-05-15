@@ -298,38 +298,35 @@ export function CoachPage() {
       {/* Invite bottom sheet */}
       {showInvite && (
         <div className="fixed inset-0 z-[60] bg-black/50 flex items-end" onClick={() => setShowInvite(false)}>
-          <div className="w-full bg-white rounded-t-3xl p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
-            <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto" />
-            <h3 className="font-semibold text-gray-900">Invite Player</h3>
-            <div>
-              <label className="text-sm font-medium text-gray-700 block mb-1">Player email</label>
-              <input
-                type="email"
-                value={inviteEmail}
-                onChange={(e) => setInviteEmail(e.target.value)}
-                placeholder="player@example.com"
-                className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-600"
-              />
+          <div className="w-full bg-white rounded-t-3xl flex flex-col max-h-[90svh]" onClick={(e) => e.stopPropagation()}>
+            <div className="overflow-y-auto flex-1 p-6 pb-2 space-y-4">
+              <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto" />
+              <h3 className="font-semibold text-gray-900">Invite Player</h3>
+              <div>
+                <label className="text-sm font-medium text-gray-700 block mb-1">Player email</label>
+                <input
+                  type="email"
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                  placeholder="player@example.com"
+                  className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-600"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700 block mb-1">Message (optional)</label>
+                <textarea
+                  value={inviteMsg}
+                  onChange={(e) => setInviteMsg(e.target.value)}
+                  rows={2}
+                  placeholder="Hi! I'd like to coach you on Golf Trainer."
+                  className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-600 resize-none"
+                />
+              </div>
+              {inviteError && <p className="text-sm text-red-600">{inviteError}</p>}
             </div>
-            <div>
-              <label className="text-sm font-medium text-gray-700 block mb-1">Message (optional)</label>
-              <textarea
-                value={inviteMsg}
-                onChange={(e) => setInviteMsg(e.target.value)}
-                rows={2}
-                placeholder="Hi! I'd like to coach you on Golf Trainer."
-                className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-600 resize-none"
-              />
-            </div>
-            {inviteError && <p className="text-sm text-red-600">{inviteError}</p>}
-            <div className="flex gap-3">
+            <div className="flex gap-3 p-4 pt-3 pb-safe border-t border-gray-100">
               <Button variant="secondary" className="flex-1" onClick={() => setShowInvite(false)}>Cancel</Button>
-              <Button
-                className="flex-1"
-                loading={inviting}
-                disabled={!inviteEmail.trim()}
-                onClick={handleInvite}
-              >
+              <Button className="flex-1" loading={inviting} disabled={!inviteEmail.trim()} onClick={handleInvite}>
                 Send invite
               </Button>
             </div>
@@ -340,37 +337,35 @@ export function CoachPage() {
       {/* Note form */}
       {showNoteForm && selectedPlayer && (
         <div className="fixed inset-0 z-[60] bg-black/50 flex items-end" onClick={() => setShowNoteForm(false)}>
-          <div className="w-full bg-white rounded-t-3xl p-6" onClick={(e) => e.stopPropagation()}>
-            <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-4" />
-            <h3 className="font-semibold text-gray-900 mb-4">Note for {selectedPlayer.name}</h3>
-            <div className="mb-3">
-              <label className="text-sm font-medium text-gray-700 block mb-1">Category</label>
-              <select
-                value={noteCategory}
-                onChange={(e) => setNoteCategory(e.target.value)}
-                className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-600"
-              >
-                {["general", "grip", "stance", "swing", "putting", "mental", "fitness"].map((c) => (
-                  <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
-                ))}
-              </select>
+          <div className="w-full bg-white rounded-t-3xl flex flex-col max-h-[90svh]" onClick={(e) => e.stopPropagation()}>
+            <div className="overflow-y-auto flex-1 p-6 pb-2 space-y-3">
+              <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto" />
+              <h3 className="font-semibold text-gray-900">Note for {selectedPlayer.name}</h3>
+              <div>
+                <label className="text-sm font-medium text-gray-700 block mb-1">Category</label>
+                <select
+                  value={noteCategory}
+                  onChange={(e) => setNoteCategory(e.target.value)}
+                  className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-600"
+                >
+                  {["general", "grip", "stance", "swing", "putting", "mental", "fitness"].map((c) => (
+                    <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
+                  ))}
+                </select>
+              </div>
+              <textarea
+                value={noteContent}
+                onChange={(e) => setNoteContent(e.target.value)}
+                rows={4}
+                placeholder="Write coaching feedback..."
+                className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-600 resize-none"
+              />
             </div>
-            <textarea
-              value={noteContent}
-              onChange={(e) => setNoteContent(e.target.value)}
-              rows={4}
-              placeholder="Write coaching feedback..."
-              className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-600 resize-none mb-4"
-            />
-            <div className="flex gap-3">
+            <div className="flex gap-3 p-4 pt-3 pb-safe border-t border-gray-100">
               <Button variant="secondary" className="flex-1" onClick={() => setShowNoteForm(false)}>Cancel</Button>
               <Button
-                className="flex-1"
-                loading={savingNote}
-                disabled={!noteContent.trim()}
-                onClick={() =>
-                  createNote({ player_id: selectedPlayer.id, content: noteContent, category: noteCategory })
-                }
+                className="flex-1" loading={savingNote} disabled={!noteContent.trim()}
+                onClick={() => createNote({ player_id: selectedPlayer.id, content: noteContent, category: noteCategory })}
               >
                 Save
               </Button>

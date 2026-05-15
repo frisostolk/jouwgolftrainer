@@ -210,7 +210,7 @@ export function NewSessionPage() {
       {/* Exercise picker */}
       {showPicker && (
         <div className="fixed inset-0 z-[60] bg-black/50 flex items-end" onClick={() => setShowPicker(false)}>
-          <div className="w-full bg-white rounded-t-3xl flex flex-col max-h-[80vh]" onClick={(e) => e.stopPropagation()}>
+          <div className="w-full bg-white rounded-t-3xl flex flex-col max-h-[80svh]" onClick={(e) => e.stopPropagation()}>
             <div className="p-4 border-b border-gray-100">
               <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-3" />
               <div className="relative">

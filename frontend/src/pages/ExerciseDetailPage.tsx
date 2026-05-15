@@ -258,7 +258,7 @@ export function ExerciseDetailPage() {
       {/* Log form bottom sheet */}
       {showLogForm && (
         <div className="fixed inset-0 z-[60] bg-black/50 flex items-end" onClick={() => setShowLogForm(false)}>
-          <div className="w-full bg-white rounded-t-3xl flex flex-col max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
+          <div className="w-full bg-white rounded-t-3xl flex flex-col max-h-[90svh]" onClick={(e) => e.stopPropagation()}>
             <div className="overflow-y-auto flex-1 p-6 pb-2 space-y-4">
               <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto" />
               <h3 className="font-semibold text-gray-900">Log "{exercise.title}"</h3>
@@ -314,7 +314,7 @@ export function ExerciseDetailPage() {
       {/* Assign form bottom sheet */}
       {showAssign && (
         <div className="fixed inset-0 z-[60] bg-black/50 flex items-end" onClick={() => setShowAssign(false)}>
-          <div className="w-full bg-white rounded-t-3xl flex flex-col max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
+          <div className="w-full bg-white rounded-t-3xl flex flex-col max-h-[90svh]" onClick={(e) => e.stopPropagation()}>
             <div className="overflow-y-auto flex-1 p-6 pb-2 space-y-4">
               <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto" />
               <h3 className="font-semibold text-gray-900">Assign to Player</h3>
@@ -362,7 +362,7 @@ export function ExerciseDetailPage() {
       {/* Edit form bottom sheet */}
       {showEdit && (
         <div className="fixed inset-0 z-[60] bg-black/50 flex items-end" onClick={() => setShowEdit(false)}>
-          <div className="w-full bg-white rounded-t-3xl flex flex-col max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
+          <div className="w-full bg-white rounded-t-3xl flex flex-col max-h-[90svh]" onClick={(e) => e.stopPropagation()}>
             <div className="overflow-y-auto flex-1 p-6 pb-2 space-y-3">
               <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto" />
               <h3 className="font-semibold text-gray-900">Edit Exercise</h3>
