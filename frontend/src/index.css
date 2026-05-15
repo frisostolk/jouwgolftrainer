@@ -8,6 +8,11 @@
     -webkit-font-smoothing: antialiased;
   }
 
+  /* Prevent iOS Safari from zooming on input focus */
+  input, textarea, select {
+    font-size: 16px !important;
+  }
+
   body {
     @apply bg-gray-50 text-gray-900 font-sans;
     overscroll-behavior: none;
@@ -20,7 +25,7 @@
 
 @layer utilities {
   .pb-safe {
-    padding-bottom: env(safe-area-inset-bottom);
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
   }
 
   .pt-safe {

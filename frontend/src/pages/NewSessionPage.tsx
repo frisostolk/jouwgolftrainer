@@ -248,7 +248,7 @@ export function NewSessionPage() {
                 );
               })}
             </div>
-            <div className="p-4 border-t border-gray-100">
+            <div className="p-4 pb-safe border-t border-gray-100">
               <Button className="w-full" onClick={() => setShowPicker(false)}>
                 Done ({selectedExercises.length} selected)
               </Button>
