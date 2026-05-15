@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { Upload, Video as VideoIcon, X, Check } from "lucide-react";
+import { Upload, Video as VideoIcon } from "lucide-react";
 import { useVideos } from "../hooks/useVideos";
 import { videosApi } from "../api/videos";
 import { useQueryClient } from "@tanstack/react-query";

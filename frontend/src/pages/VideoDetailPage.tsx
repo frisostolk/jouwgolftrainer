@@ -12,7 +12,7 @@ import { formatDate } from "../lib/utils";
 export function VideoDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { isCoach, user } = useAuth();
+  const { user } = useAuth();
   const { data: video, isLoading } = useVideo(Number(id));
   const { mutateAsync: deleteVideo } = useDeleteVideo();
   const { data: notes } = useQuery({

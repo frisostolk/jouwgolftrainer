@@ -4,7 +4,7 @@ import { Card } from "../components/Card";
 import { formatDuration, CATEGORY_COLORS, CATEGORY_LABELS } from "../lib/utils";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, Legend,
+  PieChart, Pie, Cell,
 } from "recharts";
 
 export function StatsPage() {

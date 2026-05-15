@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { Plus, Calendar, PlayCircle, Clock } from "lucide-react";
+import { Plus, Calendar, PlayCircle } from "lucide-react";
 import { useSessions } from "../hooks/useSessions";
 import { PageHeader } from "../components/PageHeader";
 import { Card } from "../components/Card";
