@@ -80,7 +80,7 @@ async def _calc_streak(user_id: int, db: AsyncSession) -> int:
 async def _weekly_stats(user_id: int, db: AsyncSession) -> list[WeeklyStats]:
     result = await db.execute(
         select(
-            func.strftime("%Y-%W", TrainingSession.created_at).label("week"),
+            func.to_char(TrainingSession.created_at, "IYYY-IW").label("week"),
             func.count(TrainingSession.id).label("sessions"),
             func.coalesce(func.sum(TrainingSession.duration_minutes), 0).label("total_minutes"),
             func.avg(TrainingSession.overall_score).label("avg_score"),
