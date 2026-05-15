@@ -1,0 +1,49 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: golf
+      POSTGRES_USER: golf
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - app
+
+  backend:
+    image: ${REGISTRY}/golf-backend:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file: /app/golf/.env.prod
+    depends_on:
+      - db
+    networks:
+      - app
+
+  frontend:
+    image: ${REGISTRY}/golf-frontend:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    networks:
+      - app
+
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - app
+
+volumes:
+  pgdata:
+
+networks:
+  app:
+    driver: bridge

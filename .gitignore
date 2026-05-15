@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+*.db
+*.db-shm
+*.db-wal
+.pytest_cache/
+dist/
+
+# Node
+node_modules/
+frontend/dist/
+.pnp.*
+*.snap
+
+# Environment
+.env
+.env.prod
+.env.local
+*.env
+
+# Docker
+.docker/
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Logs
+*.log
+logs/
+
+# Alembic
+backend/alembic/versions/__pycache__/
