@@ -139,6 +139,16 @@ export interface OverallStats {
   by_category: CategoryStats[];
 }
 
+export interface ExerciseProgressEntry {
+  exercise_id: number;
+  title: string;
+  category: string;
+  times_logged: number;
+  scores: (number | null)[];
+  dates: string[];
+  trend: "up" | "down" | "stable" | "none";
+}
+
 export interface UploadUrlResponse {
   upload_url: string;
   key: string;

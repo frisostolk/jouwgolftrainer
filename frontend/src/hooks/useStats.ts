@@ -8,3 +8,11 @@ export function useStats() {
     staleTime: 1000 * 60 * 5,
   });
 }
+
+export function useExerciseProgress() {
+  return useQuery({
+    queryKey: ["exercise-progress"],
+    queryFn: statsApi.exerciseProgress,
+    staleTime: 1000 * 60 * 5,
+  });
+}

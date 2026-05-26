@@ -6,7 +6,7 @@ from models.session import TrainingSession, SessionExercise
 from models.video import Video
 from models.exercise import Exercise
 from models.user import User
-from schemas.stats import OverallStats, WeeklyStats, CategoryStats
+from schemas.stats import OverallStats, WeeklyStats, CategoryStats, ExerciseProgressEntry
 from auth.dependencies import get_current_user
 from datetime import datetime, timezone, timedelta
 
@@ -101,6 +101,78 @@ async def _weekly_stats(user_id: int, db: AsyncSession) -> list[WeeklyStats]:
         )
         for row in result
     ]
+
+
+@router.get("/exercise-progress", response_model=list[ExerciseProgressEntry])
+async def get_exercise_progress(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    # Get all logged entries per exercise ordered by date
+    result = await db.execute(
+        select(
+            Exercise.id,
+            Exercise.title,
+            Exercise.category,
+            SessionExercise.score,
+            SessionExercise.scoring_data,
+            TrainingSession.created_at,
+        )
+        .join(SessionExercise, SessionExercise.exercise_id == Exercise.id)
+        .join(TrainingSession, TrainingSession.id == SessionExercise.session_id)
+        .where(TrainingSession.user_id == user.id)
+        .order_by(Exercise.id, TrainingSession.created_at.asc())
+    )
+    rows = result.all()
+
+    # Group by exercise
+    from collections import defaultdict
+    grouped: dict[int, list] = defaultdict(list)
+    meta: dict[int, tuple[str, str]] = {}
+    for row in rows:
+        grouped[row.id].append(row)
+        meta[row.id] = (row.title, row.category)
+
+    entries: list[ExerciseProgressEntry] = []
+    for exercise_id, logs in grouped.items():
+        if len(logs) < 2:
+            continue
+        title, category = meta[exercise_id]
+
+        # Derive a single numeric score per log: use score field or first scoring_data value
+        scores: list[float | None] = []
+        for log in logs:
+            if log.score is not None:
+                scores.append(float(log.score))
+            elif log.scoring_data:
+                first_val = next(iter(log.scoring_data.values()), None)
+                scores.append(float(first_val) if first_val is not None else None)
+            else:
+                scores.append(None)
+
+        dates = [log.created_at.strftime("%d %b") for log in logs]
+
+        # Compute trend from first to last non-None score
+        numeric = [(i, s) for i, s in enumerate(scores) if s is not None]
+        if len(numeric) >= 2:
+            diff = numeric[-1][1] - numeric[0][1]
+            trend = "up" if diff > 0 else ("down" if diff < 0 else "stable")
+        else:
+            trend = "none"
+
+        entries.append(ExerciseProgressEntry(
+            exercise_id=exercise_id,
+            title=title,
+            category=category,
+            times_logged=len(logs),
+            scores=scores[-10:],  # last 10 entries
+            dates=dates[-10:],
+            trend=trend,
+        ))
+
+    # Sort by most logged first
+    entries.sort(key=lambda e: e.times_logged, reverse=True)
+    return entries
 
 
 async def _category_stats(user_id: int, db: AsyncSession) -> list[CategoryStats]:

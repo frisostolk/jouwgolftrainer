@@ -24,3 +24,13 @@ class OverallStats(BaseModel):
     streak_days: int
     weekly: list[WeeklyStats] = []
     by_category: list[CategoryStats] = []
+
+
+class ExerciseProgressEntry(BaseModel):
+    exercise_id: int
+    title: str
+    category: str
+    times_logged: int
+    scores: list[Optional[float]]
+    dates: list[str]
+    trend: str  # "up", "down", "stable", "none"
