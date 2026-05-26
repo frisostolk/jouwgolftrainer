@@ -188,29 +188,55 @@ export function ExerciseDetailPage() {
           )
         )}
 
-        {/* Score history chart */}
-        {chartData.length > 1 && chartLines.length > 0 && (
+        {/* Score history */}
+        {history.length > 0 && (
           <Card className="p-4">
             <h2 className="font-semibold text-gray-900 mb-3">Score history</h2>
-            <ResponsiveContainer width="100%" height={180}>
-              <LineChart data={chartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
-                <XAxis dataKey="date" tick={{ fontSize: 10 }} />
-                <YAxis tick={{ fontSize: 10 }} />
-                <Tooltip />
-                {chartLines.length > 1 && <Legend wrapperStyle={{ fontSize: 11 }} />}
-                {chartLines.map((key, i) => (
-                  <Line
-                    key={key}
-                    type="monotone"
-                    dataKey={key}
-                    stroke={CHART_COLORS[i % CHART_COLORS.length]}
-                    strokeWidth={2}
-                    dot={{ r: 3 }}
-                    connectNulls
-                  />
-                ))}
-              </LineChart>
-            </ResponsiveContainer>
+
+            {chartData.length > 1 && chartLines.length > 0 ? (
+              <ResponsiveContainer width="100%" height={180}>
+                <LineChart data={chartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                  <XAxis dataKey="date" tick={{ fontSize: 10 }} />
+                  <YAxis tick={{ fontSize: 10 }} />
+                  <Tooltip />
+                  {chartLines.length > 1 && <Legend wrapperStyle={{ fontSize: 11 }} />}
+                  {chartLines.map((key, i) => (
+                    <Line
+                      key={key}
+                      type="monotone"
+                      dataKey={key}
+                      stroke={CHART_COLORS[i % CHART_COLORS.length]}
+                      strokeWidth={2}
+                      dot={{ r: 3 }}
+                      connectNulls
+                    />
+                  ))}
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <p className="text-xs text-gray-400 mb-3">Enter a score when logging to track progress over time.</p>
+            )}
+
+            <div className="mt-3 space-y-1.5">
+              {[...history].reverse().slice(0, 6).map((h, i) => {
+                const hasCustom = Object.keys(h.scoring_data).length > 0;
+                return (
+                  <div key={i} className="flex justify-between items-center text-sm py-1.5 border-b border-gray-50 last:border-0">
+                    <span className="text-gray-500">{h.date}</span>
+                    <div className="flex gap-2 flex-wrap justify-end">
+                      {hasCustom
+                        ? Object.entries(h.scoring_data).map(([k, v]) => (
+                            <span key={k} className="text-gray-700 font-medium">{k}: {v}</span>
+                          ))
+                        : h.score != null
+                          ? <span className="font-medium text-gray-900">{h.score}</span>
+                          : <span className="text-gray-400 text-xs">logged</span>
+                      }
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </Card>
         )}
 
