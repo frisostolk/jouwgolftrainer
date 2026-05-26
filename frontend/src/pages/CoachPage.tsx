@@ -324,7 +324,7 @@ export function CoachPage() {
               </div>
               {inviteError && <p className="text-sm text-red-600">{inviteError}</p>}
             </div>
-            <div className="flex gap-3 p-4 pt-3 pb-safe border-t border-gray-100">
+            <div className="flex gap-3 p-4 pt-3 pb-nav border-t border-gray-100">
               <Button variant="secondary" className="flex-1" onClick={() => setShowInvite(false)}>Cancel</Button>
               <Button className="flex-1" loading={inviting} disabled={!inviteEmail.trim()} onClick={handleInvite}>
                 Send invite
@@ -361,7 +361,7 @@ export function CoachPage() {
                 className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-600 resize-none"
               />
             </div>
-            <div className="flex gap-3 p-4 pt-3 pb-safe border-t border-gray-100">
+            <div className="flex gap-3 p-4 pt-3 pb-nav border-t border-gray-100">
               <Button variant="secondary" className="flex-1" onClick={() => setShowNoteForm(false)}>Cancel</Button>
               <Button
                 className="flex-1" loading={savingNote} disabled={!noteContent.trim()}

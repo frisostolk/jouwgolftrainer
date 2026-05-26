@@ -267,7 +267,7 @@ export function ExercisesPage() {
               </div>
             </div>
           </div>{/* end scrollable area */}
-          <div className="flex gap-3 p-4 pt-3 pb-safe border-t border-gray-100">
+          <div className="flex gap-3 p-4 pt-3 pb-nav border-t border-gray-100">
             <Button variant="secondary" className="flex-1" onClick={() => setShowCreate(false)}>Cancel</Button>
             <Button
               className="flex-1"

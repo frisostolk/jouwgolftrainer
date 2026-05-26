@@ -303,7 +303,7 @@ export function ExerciseDetailPage() {
                 />
               </div>
             </div>
-            <div className="flex gap-3 p-4 pt-3 pb-safe border-t border-gray-100">
+            <div className="flex gap-3 p-4 pt-3 pb-nav border-t border-gray-100">
               <Button variant="secondary" className="flex-1" onClick={() => setShowLogForm(false)}>Cancel</Button>
               <Button className="flex-1" loading={isPending} onClick={handleLog}>Log it</Button>
             </div>
@@ -349,7 +349,7 @@ export function ExerciseDetailPage() {
                 />
               </div>
             </div>
-            <div className="flex gap-3 p-4 pt-3 pb-safe border-t border-gray-100">
+            <div className="flex gap-3 p-4 pt-3 pb-nav border-t border-gray-100">
               <Button variant="secondary" className="flex-1" onClick={() => setShowAssign(false)}>Cancel</Button>
               <Button className="flex-1" loading={assigning} disabled={!assignPlayer} onClick={handleAssign}>
                 Assign
@@ -426,7 +426,7 @@ export function ExerciseDetailPage() {
                 />
               </div>
             </div>
-            <div className="flex gap-3 p-4 pt-3 pb-safe border-t border-gray-100">
+            <div className="flex gap-3 p-4 pt-3 pb-nav border-t border-gray-100">
               <Button variant="secondary" className="flex-1" onClick={() => setShowEdit(false)}>Cancel</Button>
               <Button className="flex-1" loading={updating} disabled={!editForm.title?.trim()} onClick={handleEdit}>
                 Save

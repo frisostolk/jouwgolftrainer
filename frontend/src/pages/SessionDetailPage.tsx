@@ -327,7 +327,7 @@ export function SessionDetailPage() {
                 />
               </div>
             </div>
-            <div className="flex gap-3 p-4 pt-3 pb-safe border-t border-gray-100">
+            <div className="flex gap-3 p-4 pt-3 pb-nav border-t border-gray-100">
               <Button variant="secondary" className="flex-1" onClick={() => setShowFinish(false)}>Cancel</Button>
               <Button className="flex-1" loading={finishing} onClick={handleFinish}>
                 Complete session
