@@ -114,14 +114,18 @@ function MapUpdater({
   holeCenter: [number, number] | null;
 }) {
   const map = useMap();
-  const prevHoleCenter = useRef<[number, number] | null>(null);
+  // Store as a string key so value equality works across re-renders
+  const prevHoleKey = useRef<string | null>(null);
 
   useEffect(() => {
     if (follow && gpsCenter) {
       map.setView(gpsCenter, Math.max(map.getZoom(), 17));
-    } else if (holeCenter && holeCenter !== prevHoleCenter.current) {
-      prevHoleCenter.current = holeCenter;
-      map.setView(holeCenter, Math.max(map.getZoom(), 18));
+    } else {
+      const key = holeCenter ? `${holeCenter[0]},${holeCenter[1]}` : null;
+      if (holeCenter && key !== prevHoleKey.current) {
+        prevHoleKey.current = key;
+        map.setView(holeCenter, Math.max(map.getZoom(), 18));
+      }
     }
   }, [gpsCenter, follow, holeCenter, map]);
   return null;
@@ -163,7 +167,7 @@ export function ActiveRoundPage() {
   const [selectedClub, setSelectedClub] = useState<string>("");
   const [gpsPos, setGpsPos] = useState<[number, number] | null>(null);
   const [gpsStatus, setGpsStatus] = useState<"acquiring" | "ok" | "denied" | "unavailable">("acquiring");
-  const [followGps, setFollowGps] = useState(true);
+  const [followGps, setFollowGps] = useState(false);
   const [satellite, setSatellite] = useState(true);
   // tapMode: null = normal, "fakeGps" = tap to set fake GPS, "setTee" = admin tap to set tee
   const [tapMode, setTapMode] = useState<null | "fakeGps" | "setTee">(null);
