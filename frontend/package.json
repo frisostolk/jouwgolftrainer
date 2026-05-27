@@ -13,9 +13,7 @@
     "open:ios": "npx cap open ios"
   },
   "dependencies": {
-    "@capacitor/cli": "^8.3.4",
     "@capacitor/core": "^8.3.4",
-    "@capacitor/ios": "^8.3.4",
     "@hookform/resolvers": "^3.6.0",
     "@tanstack/react-query": "^5.40.0",
     "@tanstack/react-query-devtools": "^5.40.0",
@@ -32,6 +30,8 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.3.4",
+    "@capacitor/ios": "^8.3.4",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
     "@typescript-eslint/eslint-plugin": "^7.13.0",
