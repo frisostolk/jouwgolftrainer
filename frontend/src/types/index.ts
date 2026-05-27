@@ -180,6 +180,8 @@ export interface RoundHole {
   is_complete: boolean;
   pin_latitude: number | null;
   pin_longitude: number | null;
+  tee_latitude: number | null;
+  tee_longitude: number | null;
   shots: Shot[];
 }
 

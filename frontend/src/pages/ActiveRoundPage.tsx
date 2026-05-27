@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { MapContainer, TileLayer, Polyline, Marker, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, Polyline, Marker, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import {
@@ -14,7 +14,8 @@ import {
   Loader2,
   MapPin,
 } from "lucide-react";
-import { useRound, useAddShot, useDeleteShot, useUpdateRound, useStrokeGained } from "../hooks/useRounds";
+import { useRound, useAddShot, useDeleteShot, useUpdateRound, useStrokeGained, useUpdateHole } from "../hooks/useRounds";
+import { useAuth } from "../context/AuthContext";
 import type { LieType, Shot } from "../types";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -76,6 +77,24 @@ function createShotIcon(num: number, lieType: LieType) {
   });
 }
 
+function createTeeIcon() {
+  return L.divIcon({
+    html: `<div style="width:16px;height:16px;background:white;border:3px solid #15803d;transform:rotate(45deg);box-shadow:0 2px 6px rgba(0,0,0,0.4)"></div>`,
+    className: "",
+    iconSize: [16, 16],
+    iconAnchor: [8, 8],
+  });
+}
+
+function createFakeGpsIcon() {
+  return L.divIcon({
+    html: `<div style="width:18px;height:18px;border-radius:50%;background:#f97316;border:3px solid white;box-shadow:0 0 0 4px rgba(249,115,22,0.3)"></div>`,
+    className: "",
+    iconSize: [18, 18],
+    iconAnchor: [9, 9],
+  });
+}
+
 function createGpsIcon() {
   return L.divIcon({
     html: `<div style="width:16px;height:16px;border-radius:50%;background:#3b82f6;border:3px solid white;box-shadow:0 0 0 4px rgba(59,130,246,0.25)"></div>`,
@@ -85,13 +104,41 @@ function createGpsIcon() {
   });
 }
 
-function MapUpdater({ center, follow }: { center: [number, number] | null; follow: boolean }) {
+function MapUpdater({
+  gpsCenter,
+  follow,
+  holeCenter,
+}: {
+  gpsCenter: [number, number] | null;
+  follow: boolean;
+  holeCenter: [number, number] | null;
+}) {
   const map = useMap();
+  const prevHoleCenter = useRef<[number, number] | null>(null);
+
   useEffect(() => {
-    if (center && follow) {
-      map.setView(center, Math.max(map.getZoom(), 17));
+    if (follow && gpsCenter) {
+      map.setView(gpsCenter, Math.max(map.getZoom(), 17));
+    } else if (holeCenter && holeCenter !== prevHoleCenter.current) {
+      prevHoleCenter.current = holeCenter;
+      map.setView(holeCenter, Math.max(map.getZoom(), 18));
     }
-  }, [center, follow, map]);
+  }, [gpsCenter, follow, holeCenter, map]);
+  return null;
+}
+
+function MapTapHandler({
+  onTap,
+  enabled,
+}: {
+  onTap: (lat: number, lng: number) => void;
+  enabled: boolean;
+}) {
+  useMapEvents({
+    click: (e) => {
+      if (enabled) onTap(e.latlng.lat, e.latlng.lng);
+    },
+  });
   return null;
 }
 
@@ -106,7 +153,10 @@ export function ActiveRoundPage() {
   const addShot = useAddShot(roundId);
   const deleteShot = useDeleteShot(roundId);
   const updateRound = useUpdateRound();
+  const updateHole = useUpdateHole(roundId);
   const { data: sg } = useStrokeGained(roundId, round?.status === "completed");
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin" || user?.role === "superuser";
 
   const [currentHole, setCurrentHole] = useState(1);
   const [selectedLie, setSelectedLie] = useState<LieType>("tee");
@@ -114,7 +164,10 @@ export function ActiveRoundPage() {
   const [gpsPos, setGpsPos] = useState<[number, number] | null>(null);
   const [gpsStatus, setGpsStatus] = useState<"acquiring" | "ok" | "denied" | "unavailable">("acquiring");
   const [followGps, setFollowGps] = useState(true);
-  const [satellite, setSatellite] = useState(false);
+  const [satellite, setSatellite] = useState(true);
+  // tapMode: null = normal, "fakeGps" = tap to set fake GPS, "setTee" = admin tap to set tee
+  const [tapMode, setTapMode] = useState<null | "fakeGps" | "setTee">(null);
+  const [fakeGpsPos, setFakeGpsPos] = useState<[number, number] | null>(null);
   const [isGettingGps, setIsGettingGps] = useState(false);
   const [shotError, setShotError] = useState<string | null>(null);
   const [showScorecard, setShowScorecard] = useState(false);
@@ -168,7 +221,25 @@ export function ActiveRoundPage() {
     .filter((s) => s.latitude !== null && s.longitude !== null)
     .map((s) => [s.latitude!, s.longitude!]);
 
-  const mapCenter: [number, number] = gpsPos ?? [52.0, 4.3];
+  // tee position of current hole (if admin has set it)
+  const holeTeaCenter: [number, number] | null =
+    hole?.tee_latitude != null && hole?.tee_longitude != null
+      ? [hole.tee_latitude, hole.tee_longitude]
+      : null;
+
+  // effective GPS: fake (test mode) > real
+  const effectiveGps = fakeGpsPos ?? gpsPos;
+  const mapCenter: [number, number] = effectiveGps ?? holeTeaCenter ?? [52.0, 4.3];
+
+  function handleMapTap(lat: number, lng: number) {
+    if (tapMode === "fakeGps") {
+      setFakeGpsPos([lat, lng]);
+      setFollowGps(false);
+    } else if (tapMode === "setTee" && isAdmin) {
+      updateHole.mutate({ holeNumber: currentHole, data: { tee_latitude: lat, tee_longitude: lng } });
+      setTapMode(null);
+    }
+  }
 
   async function saveShot(isHoleOut: boolean, lat?: number, lng?: number) {
     setShotError(null);
@@ -199,10 +270,10 @@ export function ActiveRoundPage() {
   async function recordShot(isHoleOut: boolean) {
     setShotError(null);
 
-    // If we already have a GPS position from the watch, use it instantly
-    if (gpsPos) {
+    // Fake GPS (test mode) or real GPS from watch — use immediately
+    if (effectiveGps) {
       setIsGettingGps(true);
-      await saveShot(isHoleOut, gpsPos[0], gpsPos[1]);
+      await saveShot(isHoleOut, effectiveGps[0], effectiveGps[1]);
       return;
     }
 
@@ -266,7 +337,28 @@ export function ActiveRoundPage() {
             {round.status === "active" ? "In Progress" : "Completed"}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-1">
+          {/* Test mode toggle */}
+          <button
+            onClick={() => {
+              if (tapMode === "fakeGps") { setTapMode(null); setFakeGpsPos(null); }
+              else setTapMode("fakeGps");
+            }}
+            className={`px-2 py-1 rounded text-[10px] font-bold ${tapMode === "fakeGps" || fakeGpsPos ? "bg-orange-500 text-white" : "text-gray-400"}`}
+            title="Test mode: tap map to set fake GPS"
+          >
+            TEST
+          </button>
+          {/* Admin: set tee positions */}
+          {isAdmin && (
+            <button
+              onClick={() => setTapMode(tapMode === "setTee" ? null : "setTee")}
+              className={`px-2 py-1 rounded text-[10px] font-bold ${tapMode === "setTee" ? "bg-green-500 text-white" : "text-gray-400"}`}
+              title="Admin: tap map to set tee position"
+            >
+              TEE
+            </button>
+          )}
           <button onClick={() => setShowScorecard(!showScorecard)} className="p-1">
             <Flag className="w-5 h-5 text-gray-300" />
           </button>
@@ -373,7 +465,8 @@ export function ActiveRoundPage() {
           ) : (
             <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
           )}
-          <MapUpdater center={gpsPos} follow={followGps} />
+          <MapUpdater gpsCenter={gpsPos} follow={followGps} holeCenter={tapMode ? null : holeTeaCenter} />
+          <MapTapHandler enabled={tapMode !== null} onTap={handleMapTap} />
 
           {/* Shot path */}
           {shotPositions.length > 1 && (
@@ -394,9 +487,19 @@ export function ActiveRoundPage() {
             ) : null
           )}
 
-          {/* GPS position */}
-          {gpsPos && (
+          {/* Tee position marker */}
+          {holeTeaCenter && (
+            <Marker position={holeTeaCenter} icon={createTeeIcon()} />
+          )}
+
+          {/* Real GPS position (only when not overridden by fake) */}
+          {gpsPos && !fakeGpsPos && (
             <Marker position={gpsPos} icon={createGpsIcon()} />
+          )}
+
+          {/* Fake GPS position (test mode) */}
+          {fakeGpsPos && (
+            <Marker position={fakeGpsPos} icon={createFakeGpsIcon()} />
           )}
         </MapContainer>
 
@@ -421,19 +524,36 @@ export function ActiveRoundPage() {
           </button>
         </div>
 
-        {/* GPS status badge */}
-        <div className="absolute top-3 left-3 z-[1000]">
-          {gpsStatus === "acquiring" && (
-            <div className="flex items-center gap-1.5 bg-black/60 text-white text-xs px-2.5 py-1 rounded-full">
-              <Loader2 className="w-3 h-3 animate-spin" /> Acquiring GPS…
-            </div>
-          )}
-          {gpsStatus === "denied" && (
-            <div className="flex items-center gap-1.5 bg-red-600/90 text-white text-xs px-2.5 py-1 rounded-full">
-              <MapPin className="w-3 h-3" /> Location denied
-            </div>
-          )}
-        </div>
+        {/* Tap mode banner */}
+        {tapMode && (
+          <div className="absolute top-0 inset-x-0 z-[1001] flex items-center justify-between bg-orange-500 text-white text-xs font-semibold px-3 py-2">
+            <span>
+              {tapMode === "fakeGps" ? "Tap map to place fake GPS position" : "Tap map to set tee position for Hole " + currentHole}
+            </span>
+            <button onClick={() => setTapMode(null)} className="ml-2 underline text-xs">Cancel</button>
+          </div>
+        )}
+
+        {/* GPS / mode status badge (only when no tap mode active) */}
+        {!tapMode && (
+          <div className="absolute top-3 left-3 z-[1000]">
+            {fakeGpsPos && (
+              <div className="flex items-center gap-1.5 bg-orange-500/90 text-white text-xs px-2.5 py-1 rounded-full">
+                <MapPin className="w-3 h-3" /> Test position active
+              </div>
+            )}
+            {!fakeGpsPos && gpsStatus === "acquiring" && (
+              <div className="flex items-center gap-1.5 bg-black/60 text-white text-xs px-2.5 py-1 rounded-full">
+                <Loader2 className="w-3 h-3 animate-spin" /> Acquiring GPS…
+              </div>
+            )}
+            {!fakeGpsPos && gpsStatus === "denied" && (
+              <div className="flex items-center gap-1.5 bg-red-600/90 text-white text-xs px-2.5 py-1 rounded-full">
+                <MapPin className="w-3 h-3" /> Location denied
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Bottom area — flex-1 so it fills space below the fixed-height map */}

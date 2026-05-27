@@ -51,6 +51,15 @@ export function useAddShot(roundId: number) {
   });
 }
 
+export function useUpdateHole(roundId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ holeNumber, data }: { holeNumber: number; data: Parameters<typeof roundsApi.updateHole>[2] }) =>
+      roundsApi.updateHole(roundId, holeNumber, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["rounds", roundId] }),
+  });
+}
+
 export function useDeleteShot(roundId: number) {
   const qc = useQueryClient();
   return useMutation({

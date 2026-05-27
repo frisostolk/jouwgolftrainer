@@ -34,6 +34,8 @@ export const roundsApi = {
   delete: (id: number) => api.delete(`/rounds/${id}`),
   addShot: (roundId: number, holeNumber: number, data: AddShotPayload) =>
     api.post<Shot>(`/rounds/${roundId}/holes/${holeNumber}/shots`, data).then((r) => r.data),
+  updateHole: (roundId: number, holeNumber: number, data: { tee_latitude?: number; tee_longitude?: number; par?: number; distance_yards?: number }) =>
+    api.patch(`/rounds/${roundId}/holes/${holeNumber}`, data).then((r) => r.data),
   deleteShot: (roundId: number, holeNumber: number, shotId: number) =>
     api.delete(`/rounds/${roundId}/holes/${holeNumber}/shots/${shotId}`),
   getStrokeGained: (roundId: number) =>

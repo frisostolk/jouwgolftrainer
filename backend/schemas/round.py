@@ -47,6 +47,14 @@ class ShotResponse(BaseModel):
     created_at: datetime
 
 
+class HoleUpdate(BaseModel):
+    par: Optional[int] = None
+    distance_yards: Optional[int] = None
+    stroke_index: Optional[int] = None
+    tee_latitude: Optional[float] = None
+    tee_longitude: Optional[float] = None
+
+
 class HoleResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -59,6 +67,8 @@ class HoleResponse(BaseModel):
     is_complete: bool
     pin_latitude: Optional[float]
     pin_longitude: Optional[float]
+    tee_latitude: Optional[float]
+    tee_longitude: Optional[float]
     shots: list[ShotResponse]
 
 

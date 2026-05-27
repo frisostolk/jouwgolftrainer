@@ -8,6 +8,7 @@ from models.user import User
 from schemas.round import (
     RoundCreate, RoundUpdate, RoundResponse, RoundSummary,
     ShotCreate, ShotResponse, StrokeGainedResponse, StrokeGainedHole,
+    HoleUpdate, HoleResponse,
 )
 from auth.dependencies import get_current_user
 from services.stroke_gained import compute_and_store_hole_sg, calculate_hole_sg, calculate_round_sg
@@ -113,6 +114,22 @@ async def delete_round(
 ):
     r = await _get_round_or_404(round_id, user.id, db)
     await db.delete(r)
+
+
+@router.patch("/{round_id}/holes/{hole_number}", response_model=HoleResponse)
+async def update_hole(
+    round_id: int,
+    hole_number: int,
+    data: HoleUpdate,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    hole = await _get_hole_or_404(round_id, hole_number, user.id, db)
+    for field, value in data.model_dump(exclude_none=True).items():
+        setattr(hole, field, value)
+    await db.flush()
+    await db.refresh(hole, ["shots"])
+    return hole
 
 
 @router.post("/{round_id}/holes/{hole_number}/shots", response_model=ShotResponse, status_code=201)
