@@ -3,7 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from config import get_settings
 from database import engine, Base
-from routers import auth, exercises, sessions, videos, coach, stats, connections
+from routers import auth, exercises, sessions, videos, coach, stats, connections, rounds
+import models.round  # noqa: F401 — ensures Round/RoundHole/Shot tables are registered
 
 settings = get_settings()
 
@@ -38,6 +39,7 @@ app.include_router(videos.router, prefix="/api/videos", tags=["videos"])
 app.include_router(coach.router, prefix="/api/coach", tags=["coach"])
 app.include_router(stats.router, prefix="/api/stats", tags=["stats"])
 app.include_router(connections.router, prefix="/api/connections", tags=["connections"])
+app.include_router(rounds.router, prefix="/api/rounds", tags=["rounds"])
 
 
 @app.get("/api/health")

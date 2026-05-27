@@ -27,6 +27,7 @@ class User(TimestampMixin, Base):
 
     sessions: Mapped[list["TrainingSession"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     videos: Mapped[list["Video"]] = relationship(back_populates="user", cascade="all, delete-orphan")
+    rounds: Mapped[list["Round"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     coach_notes: Mapped[list["CoachNote"]] = relationship(
         back_populates="player",
         foreign_keys="CoachNote.player_id",

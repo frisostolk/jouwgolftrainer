@@ -154,3 +154,80 @@ export interface UploadUrlResponse {
   key: string;
   fields: Record<string, string>;
 }
+
+export type LieType = "tee" | "fairway" | "rough" | "bunker" | "green" | "penalty";
+
+export interface Shot {
+  id: number;
+  shot_number: number;
+  lie_type: LieType;
+  latitude: number | null;
+  longitude: number | null;
+  club: string | null;
+  result: string | null;
+  distance_to_pin_yards: number | null;
+  stroke_gained: number | null;
+  created_at: string;
+}
+
+export interface RoundHole {
+  id: number;
+  hole_number: number;
+  par: number;
+  distance_yards: number | null;
+  stroke_index: number | null;
+  gross_score: number | null;
+  is_complete: boolean;
+  pin_latitude: number | null;
+  pin_longitude: number | null;
+  shots: Shot[];
+}
+
+export interface Round {
+  id: number;
+  course_name: string;
+  tee_color: string | null;
+  status: "active" | "completed";
+  total_holes: number;
+  handicap: number | null;
+  notes: string;
+  created_at: string;
+  holes: RoundHole[];
+}
+
+export interface RoundSummary {
+  id: number;
+  course_name: string;
+  tee_color: string | null;
+  status: "active" | "completed";
+  total_holes: number;
+  handicap: number | null;
+  notes: string;
+  created_at: string;
+}
+
+export interface StrokeGainedHole {
+  hole_number: number;
+  par: number;
+  gross_score: number | null;
+  vs_par: number | null;
+  sg_total: number;
+  sg_off_tee: number;
+  sg_approach: number;
+  sg_around_green: number;
+  sg_putting: number;
+}
+
+export interface StrokeGained {
+  round_id: number;
+  holes_completed: number;
+  total_score: number | null;
+  total_par: number;
+  vs_par: number | null;
+  sg_total: number;
+  sg_off_tee: number;
+  sg_approach: number;
+  sg_around_green: number;
+  sg_putting: number;
+  by_hole: StrokeGainedHole[];
+}
