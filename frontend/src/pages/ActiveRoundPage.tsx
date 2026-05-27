@@ -174,7 +174,7 @@ function MapUpdater({
       const dlat = green[0] - tee[0];
       const dlng = (green[1] - tee[1]) * Math.cos((tee[0] * Math.PI) / 180);
       const bearingDeg = Math.atan2(dlng, dlat) * (180 / Math.PI);
-      (map as any).setBearing(bearingDeg);
+      (map as any).setBearing(-bearingDeg);
     } else {
       (map as any).setBearing(0);
     }
