@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
+from sqlalchemy import text
 from config import get_settings
 from database import engine, Base
 from routers import auth, exercises, sessions, videos, coach, stats, connections, rounds
@@ -13,6 +14,15 @@ settings = get_settings()
 async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # Add columns that may be missing from tables created before they were added to the model
+        for stmt in [
+            "ALTER TABLE round_holes ADD COLUMN IF NOT EXISTS tee_latitude FLOAT",
+            "ALTER TABLE round_holes ADD COLUMN IF NOT EXISTS tee_longitude FLOAT",
+        ]:
+            try:
+                await conn.execute(text(stmt))
+            except Exception:
+                pass
     yield
 
 
