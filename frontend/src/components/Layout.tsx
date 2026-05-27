@@ -1,5 +1,5 @@
 import { Outlet, NavLink } from "react-router-dom";
-import { Home, Calendar, Video, BarChart2, Users, User, Flag } from "lucide-react";
+import { Home, Calendar, Video, BarChart2, Users, User, Flag, Settings } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { cn } from "../lib/utils";
 
@@ -12,7 +12,7 @@ const navItems = [
 ];
 
 export function Layout() {
-  const { isCoach } = useAuth();
+  const { isCoach, isSuperuser } = useAuth();
 
   return (
     <div className="flex flex-col min-h-screen min-h-dvh bg-gray-50">
@@ -51,6 +51,20 @@ export function Layout() {
             >
               <Users className="w-5 h-5" />
               <span className="text-[10px] font-medium">Coach</span>
+            </NavLink>
+          )}
+          {isSuperuser && (
+            <NavLink
+              to="/admin"
+              className={({ isActive }) =>
+                cn(
+                  "flex flex-col items-center gap-0.5 px-3 py-1 min-w-[44px]",
+                  isActive ? "text-green-700" : "text-gray-500"
+                )
+              }
+            >
+              <Settings className="w-5 h-5" />
+              <span className="text-[10px] font-medium">Admin</span>
             </NavLink>
           )}
           <NavLink

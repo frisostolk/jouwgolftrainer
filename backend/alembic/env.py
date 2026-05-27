@@ -16,7 +16,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from database import Base
-from models import user, exercise, session, video, coach, round  # noqa: F401
+from models import user, exercise, session, video, coach, round, course  # noqa: F401
 
 target_metadata = Base.metadata
 

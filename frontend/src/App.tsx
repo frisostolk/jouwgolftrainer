@@ -17,6 +17,8 @@ import { ProfilePage } from "./pages/ProfilePage";
 import { RoundsPage } from "./pages/RoundsPage";
 import { NewRoundPage } from "./pages/NewRoundPage";
 import { ActiveRoundPage } from "./pages/ActiveRoundPage";
+import { AdminSettingsPage } from "./pages/AdminSettingsPage";
+import { CourseEditorPage } from "./pages/CourseEditorPage";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
@@ -53,6 +55,8 @@ export default function App() {
             <Route path="rounds" element={<RoundsPage />} />
             <Route path="rounds/new" element={<NewRoundPage />} />
             <Route path="rounds/:id" element={<ActiveRoundPage />} />
+            <Route path="admin" element={<AdminSettingsPage />} />
+            <Route path="admin/courses/:id" element={<CourseEditorPage />} />
           </Route>
         </Routes>
       </BrowserRouter>

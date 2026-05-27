@@ -4,8 +4,9 @@ from contextlib import asynccontextmanager
 from sqlalchemy import text
 from config import get_settings
 from database import engine, Base
-from routers import auth, exercises, sessions, videos, coach, stats, connections, rounds
+from routers import auth, exercises, sessions, videos, coach, stats, connections, rounds, courses
 import models.round  # noqa: F401 — ensures Round/RoundHole/Shot tables are registered
+import models.course  # noqa: F401 — ensures CourseTemplate/CourseHoleTemplate tables are registered
 
 settings = get_settings()
 
@@ -50,6 +51,7 @@ app.include_router(coach.router, prefix="/api/coach", tags=["coach"])
 app.include_router(stats.router, prefix="/api/stats", tags=["stats"])
 app.include_router(connections.router, prefix="/api/connections", tags=["connections"])
 app.include_router(rounds.router, prefix="/api/rounds", tags=["rounds"])
+app.include_router(courses.router, prefix="/api/courses", tags=["courses"])
 
 
 @app.get("/api/health")

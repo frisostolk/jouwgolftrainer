@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronLeft, Flag } from "lucide-react";
+import { ChevronLeft, Flag, Sparkles } from "lucide-react";
 import { Button } from "../components/Button";
 import { Input } from "../components/Input";
 import { useCreateRound } from "../hooks/useRounds";
+import { coursesApi } from "../api/courses";
 import type { HoleSetup } from "../api/rounds";
 
 const TEE_COLORS = ["White", "Yellow", "Red", "Blue", "Black", "Gold"];
@@ -26,6 +27,7 @@ export function NewRoundPage() {
   const [totalHoles, setTotalHoles] = useState<9 | 18>(18);
   const [holes, setHoles] = useState<HoleSetup[]>(defaultHoles(18));
   const [step, setStep] = useState<"info" | "holes">("info");
+  const [templateLoaded, setTemplateLoaded] = useState(false);
 
   function handleTotalHolesChange(n: 9 | 18) {
     setTotalHoles(n);
@@ -142,13 +144,44 @@ export function NewRoundPage() {
           <Button
             className="w-full"
             disabled={!courseName.trim()}
-            onClick={() => setStep("holes")}
+            onClick={async () => {
+              try {
+                const template = await coursesApi.lookup(courseName.trim());
+                // Pre-fill holes from template
+                const templateHoles = Object.fromEntries(template.holes.map((h) => [h.hole_number, h]));
+                const newTotal = template.total_holes as 9 | 18;
+                setTotalHoles(newTotal);
+                setHoles(
+                  Array.from({ length: newTotal }, (_, i) => {
+                    const th = templateHoles[i + 1];
+                    return {
+                      hole_number: i + 1,
+                      par: th?.par ?? 4,
+                      distance_yards: th?.distance_yards ?? undefined,
+                    };
+                  })
+                );
+                setTemplateLoaded(true);
+              } catch {
+                // No template found — proceed with defaults
+                setTemplateLoaded(false);
+              }
+              setStep("holes");
+            }}
           >
             Set Up Holes
           </Button>
         </div>
       ) : (
         <div className="px-4 py-4">
+          {/* Template pre-fill notice */}
+          {templateLoaded && (
+            <div className="flex items-center gap-2 mb-3 px-3 py-2 bg-green-50 border border-green-200 rounded-xl text-sm text-green-700">
+              <Sparkles className="w-4 h-4 flex-shrink-0" />
+              Par &amp; distances pre-filled from course template
+            </div>
+          )}
+
           {/* Quick presets */}
           <div className="flex items-center justify-between mb-4">
             <p className="text-sm text-gray-500">

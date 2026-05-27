@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 from database import get_db
 from models.round import Round, RoundHole, Shot
+from models.course import CourseTemplate
 from models.user import User
 from schemas.round import (
     RoundCreate, RoundUpdate, RoundResponse, RoundSummary,
@@ -57,13 +58,25 @@ async def create_round(
     db.add(r)
     await db.flush()
 
+    # Check if a course template exists for this course name to pre-apply tee positions
+    tpl_result = await db.execute(
+        select(CourseTemplate)
+        .where(func.lower(CourseTemplate.name) == func.lower(data.course_name))
+        .options(selectinload(CourseTemplate.holes))
+    )
+    template = tpl_result.scalar_one_or_none()
+    tpl_holes = {h.hole_number: h for h in template.holes} if template else {}
+
     for h in data.holes:
+        th = tpl_holes.get(h.hole_number)
         db.add(RoundHole(
             round_id=r.id,
             hole_number=h.hole_number,
-            par=h.par,
-            distance_yards=h.distance_yards,
-            stroke_index=h.stroke_index,
+            par=th.par if th and h.par == 4 and th.par else h.par,
+            distance_yards=th.distance_yards if th and h.distance_yards is None and th.distance_yards else h.distance_yards,
+            stroke_index=th.stroke_index if th and h.stroke_index is None else h.stroke_index,
+            tee_latitude=th.tee_latitude if th else None,
+            tee_longitude=th.tee_longitude if th else None,
         ))
 
     await db.flush()

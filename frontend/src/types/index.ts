@@ -220,6 +220,31 @@ export interface StrokeGainedHole {
   sg_putting: number;
 }
 
+export interface CourseHoleTemplate {
+  id: number;
+  hole_number: number;
+  par: number;
+  distance_yards: number | null;
+  stroke_index: number | null;
+  tee_latitude: number | null;
+  tee_longitude: number | null;
+}
+
+export interface CourseTemplate {
+  id: number;
+  name: string;
+  total_holes: number;
+  created_at: string;
+  holes: CourseHoleTemplate[];
+}
+
+export interface CourseTemplateSummary {
+  id: number;
+  name: string;
+  total_holes: number;
+  created_at: string;
+}
+
 export interface StrokeGained {
   round_id: number;
   holes_completed: number;
