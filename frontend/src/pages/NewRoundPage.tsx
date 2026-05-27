@@ -43,14 +43,20 @@ export function NewRoundPage() {
   }
 
   function setHoleDist(holeNumber: number, dist: string) {
-    const n = parseInt(dist);
+    const meters = parseInt(dist);
+    // Store internally as yards (backend unit) by converting from meters
+    const yards = isNaN(meters) ? undefined : Math.round(meters / 0.9144);
     setHoles((prev) =>
       prev.map((h) =>
-        h.hole_number === holeNumber
-          ? { ...h, distance_yards: isNaN(n) ? undefined : n }
-          : h
+        h.hole_number === holeNumber ? { ...h, distance_yards: yards } : h
       )
     );
+  }
+
+  // Display value for hole distance input (stored as yards, shown as meters)
+  function displayDist(yards: number | undefined) {
+    if (yards === undefined) return "";
+    return String(Math.round(yards * 0.9144));
   }
 
   async function handleStart() {
@@ -191,11 +197,11 @@ export function NewRoundPage() {
                     type="number"
                     inputMode="numeric"
                     placeholder="Dist"
-                    value={hole.distance_yards ?? ""}
+                    value={displayDist(hole.distance_yards)}
                     onChange={(e) => setHoleDist(hole.hole_number, e.target.value)}
                     className="w-full px-2 py-1 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-green-500"
                   />
-                  <span className="text-xs text-gray-400 flex-shrink-0">yd</span>
+                  <span className="text-xs text-gray-400 flex-shrink-0">m</span>
                 </div>
               </div>
             ))}

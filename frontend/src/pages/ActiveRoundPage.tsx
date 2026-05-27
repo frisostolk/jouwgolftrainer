@@ -112,9 +112,11 @@ export function ActiveRoundPage() {
   const [selectedLie, setSelectedLie] = useState<LieType>("tee");
   const [selectedClub, setSelectedClub] = useState<string>("");
   const [gpsPos, setGpsPos] = useState<[number, number] | null>(null);
+  const [gpsStatus, setGpsStatus] = useState<"acquiring" | "ok" | "denied" | "unavailable">("acquiring");
   const [followGps, setFollowGps] = useState(true);
+  const [satellite, setSatellite] = useState(false);
   const [isGettingGps, setIsGettingGps] = useState(false);
-  const [gpsError, setGpsError] = useState<string | null>(null);
+  const [shotError, setShotError] = useState<string | null>(null);
   const [showScorecard, setShowScorecard] = useState(false);
   const [showSG, setShowSG] = useState(false);
   const watchRef = useRef<number | null>(null);
@@ -122,18 +124,21 @@ export function ActiveRoundPage() {
   // Start GPS watch on mount
   useEffect(() => {
     if (!navigator.geolocation) {
-      setGpsError("GPS not available on this device");
+      setGpsStatus("unavailable");
       return;
     }
     watchRef.current = navigator.geolocation.watchPosition(
       (pos) => {
         setGpsPos([pos.coords.latitude, pos.coords.longitude]);
-        setGpsError(null);
+        setGpsStatus("ok");
       },
       (err) => {
-        setGpsError(err.code === 1 ? "Location permission denied" : "GPS unavailable");
+        // Only surface permanent permission denial; transient errors (timeout/unavailable)
+        // happen while GPS is still acquiring — don't block the user.
+        if (err.code === 1) setGpsStatus("denied");
+        // else: keep status as "acquiring" or "ok" so user isn't blocked
       },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 }
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
     );
     return () => {
       if (watchRef.current !== null) navigator.geolocation.clearWatch(watchRef.current);
@@ -165,45 +170,67 @@ export function ActiveRoundPage() {
 
   const mapCenter: [number, number] = gpsPos ?? [52.0, 4.3];
 
+  async function saveShot(isHoleOut: boolean, lat?: number, lng?: number) {
+    setShotError(null);
+    setIsGettingGps(false);
+    try {
+      await addShot.mutateAsync({
+        holeNumber: currentHole,
+        data: {
+          lie_type: selectedLie,
+          latitude: lat,
+          longitude: lng,
+          club: selectedClub || undefined,
+          is_hole_out: isHoleOut,
+        },
+      });
+      if (isHoleOut) {
+        if (currentHole < (round?.total_holes ?? 18)) {
+          setTimeout(() => setCurrentHole((n) => n + 1), 600);
+        }
+      } else {
+        setSelectedLie("fairway");
+      }
+    } catch {
+      setShotError("Failed to save shot");
+    }
+  }
+
   async function recordShot(isHoleOut: boolean) {
-    if (!navigator.geolocation) {
-      setGpsError("GPS not available");
+    setShotError(null);
+
+    // If we already have a GPS position from the watch, use it instantly
+    if (gpsPos) {
+      setIsGettingGps(true);
+      await saveShot(isHoleOut, gpsPos[0], gpsPos[1]);
       return;
     }
-    setIsGettingGps(true);
-    setGpsError(null);
 
+    // Permission denied — save without coordinates
+    if (gpsStatus === "denied" || gpsStatus === "unavailable") {
+      await saveShot(isHoleOut);
+      return;
+    }
+
+    // Still acquiring — try a one-shot request with generous timeout
+    if (!navigator.geolocation) {
+      await saveShot(isHoleOut);
+      return;
+    }
+
+    setIsGettingGps(true);
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
-        setIsGettingGps(false);
-        try {
-          await addShot.mutateAsync({
-            holeNumber: currentHole,
-            data: {
-              lie_type: selectedLie,
-              latitude: pos.coords.latitude,
-              longitude: pos.coords.longitude,
-              club: selectedClub || undefined,
-              is_hole_out: isHoleOut,
-            },
-          });
-          if (isHoleOut) {
-            // Move to next hole automatically
-            if (currentHole < (round?.total_holes ?? 18)) {
-              setTimeout(() => setCurrentHole((n) => n + 1), 600);
-            }
-          } else {
-            setSelectedLie("fairway");
-          }
-        } catch {
-          setGpsError("Failed to save shot");
-        }
+        setGpsPos([pos.coords.latitude, pos.coords.longitude]);
+        setGpsStatus("ok");
+        await saveShot(isHoleOut, pos.coords.latitude, pos.coords.longitude);
       },
-      (err) => {
+      async () => {
+        // Timed out or unavailable — record shot without coordinates
         setIsGettingGps(false);
-        setGpsError(err.code === 1 ? "Location denied" : "Could not get location");
+        await saveShot(isHoleOut);
       },
-      { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+      { enableHighAccuracy: false, timeout: 10000, maximumAge: 30000 }
     );
   }
 
@@ -227,7 +254,7 @@ export function ActiveRoundPage() {
   }
 
   return (
-    <div className="flex flex-col min-h-screen bg-gray-900">
+    <div className="flex flex-col h-dvh bg-gray-900">
       {/* Top bar */}
       <div className="bg-gray-900 text-white px-4 pt-safe flex items-center justify-between h-14 flex-shrink-0">
         <button onClick={() => navigate("/rounds")} className="p-1 -ml-1">
@@ -303,7 +330,7 @@ export function ActiveRoundPage() {
               <p className="text-white font-bold text-lg leading-none">Hole {hole.hole_number}</p>
               <p className="text-gray-400 text-xs">
                 Par {hole.par}
-                {hole.distance_yards ? ` · ${hole.distance_yards}yd` : ""}
+                {hole.distance_yards ? ` · ${Math.round(hole.distance_yards * 0.9144)}m` : ""}
               </p>
             </div>
             <button
@@ -332,8 +359,8 @@ export function ActiveRoundPage() {
         </div>
       )}
 
-      {/* Map */}
-      <div className="flex-1 relative" style={{ minHeight: 220 }}>
+      {/* Map — fixed vh height so Leaflet always gets a real pixel value */}
+      <div className="relative flex-shrink-0" style={{ height: "45vh" }}>
         <MapContainer
           center={mapCenter}
           zoom={17}
@@ -341,9 +368,11 @@ export function ActiveRoundPage() {
           zoomControl={false}
           attributionControl={false}
         >
-          <TileLayer
-            url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-          />
+          {satellite ? (
+            <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" />
+          ) : (
+            <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+          )}
           <MapUpdater center={gpsPos} follow={followGps} />
 
           {/* Shot path */}
@@ -371,16 +400,44 @@ export function ActiveRoundPage() {
           )}
         </MapContainer>
 
-        {/* GPS follow toggle */}
-        <button
-          onClick={() => setFollowGps((f) => !f)}
-          className={`absolute bottom-3 right-3 z-[1000] w-10 h-10 rounded-full flex items-center justify-center shadow-lg transition-colors ${
-            followGps ? "bg-blue-500 text-white" : "bg-white text-gray-600"
-          }`}
-        >
-          <Crosshair className="w-5 h-5" />
-        </button>
+        {/* Map controls */}
+        <div className="absolute bottom-3 right-3 z-[1000] flex flex-col gap-2">
+          <button
+            onClick={() => setFollowGps((f) => !f)}
+            className={`w-10 h-10 rounded-full flex items-center justify-center shadow-lg transition-colors ${
+              followGps ? "bg-blue-500 text-white" : "bg-white text-gray-600"
+            }`}
+          >
+            <Crosshair className="w-5 h-5" />
+          </button>
+          <button
+            onClick={() => setSatellite((s) => !s)}
+            className={`w-10 h-10 rounded-full flex items-center justify-center shadow-lg transition-colors text-xs font-bold ${
+              satellite ? "bg-green-600 text-white" : "bg-white text-gray-700"
+            }`}
+            title={satellite ? "Switch to map" : "Switch to satellite"}
+          >
+            {satellite ? "MAP" : "SAT"}
+          </button>
+        </div>
+
+        {/* GPS status badge */}
+        <div className="absolute top-3 left-3 z-[1000]">
+          {gpsStatus === "acquiring" && (
+            <div className="flex items-center gap-1.5 bg-black/60 text-white text-xs px-2.5 py-1 rounded-full">
+              <Loader2 className="w-3 h-3 animate-spin" /> Acquiring GPS…
+            </div>
+          )}
+          {gpsStatus === "denied" && (
+            <div className="flex items-center gap-1.5 bg-red-600/90 text-white text-xs px-2.5 py-1 rounded-full">
+              <MapPin className="w-3 h-3" /> Location denied
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* Bottom area — flex-1 so it fills space below the fixed-height map */}
+      <div className="flex-1 overflow-y-auto relative">
 
       {/* Controls panel */}
       {round.status === "active" && hole && !hole.is_complete && (
@@ -417,12 +474,28 @@ export function ActiveRoundPage() {
             </select>
           </div>
 
-          {/* GPS error */}
-          {gpsError && (
-            <p className="text-xs text-red-500 mb-2 flex items-center gap-1">
-              <MapPin className="w-3.5 h-3.5" /> {gpsError}
-            </p>
-          )}
+          {/* Status row */}
+          <div className="flex items-center justify-between mb-2 min-h-[18px]">
+            {shotError && (
+              <p className="text-xs text-red-500 flex items-center gap-1">
+                <MapPin className="w-3.5 h-3.5" /> {shotError}
+              </p>
+            )}
+            {!shotError && gpsStatus === "acquiring" && !gpsPos && (
+              <p className="text-xs text-amber-600 flex items-center gap-1">
+                <Loader2 className="w-3 h-3 animate-spin" /> Getting GPS fix…
+              </p>
+            )}
+            {!shotError && gpsStatus === "ok" && (
+              <p className="text-xs text-green-600 flex items-center gap-1">
+                <MapPin className="w-3 h-3" /> GPS ready
+              </p>
+            )}
+            {!shotError && gpsStatus === "denied" && (
+              <p className="text-xs text-orange-500">Shot recorded without GPS</p>
+            )}
+            <span />
+          </div>
 
           {/* Action buttons */}
           <div className="flex gap-2">
@@ -506,7 +579,7 @@ export function ActiveRoundPage() {
 
       {/* Shot list for current hole */}
       {shots.length > 0 && !showScorecard && !showSG && (
-        <div className="bg-white border-t border-gray-100 px-4 py-3 pb-safe max-h-40 overflow-y-auto">
+        <div className="bg-white border-t border-gray-100 px-4 py-3 pb-safe">
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Shots</p>
           <div className="space-y-1.5">
             {shots.map((shot) => (
@@ -524,7 +597,7 @@ export function ActiveRoundPage() {
                   </span>
                   {shot.distance_to_pin_yards !== null && (
                     <span className="text-xs text-gray-400">
-                      {Math.round(shot.distance_to_pin_yards)}yd
+                      {Math.round(shot.distance_to_pin_yards * 0.9144)}m
                     </span>
                   )}
                 </div>
@@ -558,6 +631,8 @@ export function ActiveRoundPage() {
       {showSG && (
         <StrokeGainedPanel sg={sg ?? null} onClose={() => setShowSG(false)} />
       )}
+
+      </div>{/* end bottom area */}
     </div>
   );
 }
@@ -605,7 +680,7 @@ function ScorecardPanel({ round, onClose }: { round: import("../types").Round; o
             <tr className="text-xs text-gray-400 border-b border-gray-100">
               <th className="text-left py-2 font-medium">Hole</th>
               <th className="text-center py-2 font-medium">Par</th>
-              <th className="text-center py-2 font-medium">Dist</th>
+              <th className="text-center py-2 font-medium">m</th>
               <th className="text-center py-2 font-medium">Score</th>
               <th className="text-center py-2 font-medium">+/-</th>
             </tr>
@@ -616,7 +691,7 @@ function ScorecardPanel({ round, onClose }: { round: import("../types").Round; o
                 <td className="py-2 font-medium">{h.hole_number}</td>
                 <td className="py-2 text-center text-gray-500">{h.par}</td>
                 <td className="py-2 text-center text-gray-400 text-xs">
-                  {h.distance_yards ? `${h.distance_yards}` : "—"}
+                  {h.distance_yards ? `${Math.round(h.distance_yards * 0.9144)}` : "—"}
                 </td>
                 <td className="py-2 text-center">
                   {h.gross_score !== null ? (
