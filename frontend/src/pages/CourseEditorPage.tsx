@@ -7,7 +7,7 @@ import { ChevronLeft, Trash2, Plus, CheckCircle2 } from "lucide-react";
 import { useCourse, useUpdateCourseHole, useAddBunker, useDeleteBunker } from "../hooks/useCourses";
 import type { CourseHoleTemplate, CourseHoleBunker } from "../types";
 
-// ─── Map icons ────────────────────────────────────────────────────────────────
+// ─── Icons ────────────────────────────────────────────────────────────────────
 
 function createTeeIcon() {
   return L.divIcon({
@@ -18,12 +18,14 @@ function createTeeIcon() {
   });
 }
 
-function createGreenIcon() {
+function createGreenPointIcon(label: string, active: boolean) {
+  const bg = active ? "#15803d" : "#16a34a";
+  const size = label === "M" ? 22 : 18;
   return L.divIcon({
-    html: `<div style="width:20px;height:20px;border-radius:50%;background:#16a34a;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center"><span style="color:white;font-size:9px;font-weight:900;line-height:1">⛳</span></div>`,
+    html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${bg};border:2px solid white;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;color:white;box-shadow:0 2px 6px rgba(0,0,0,0.4)">${label}</div>`,
     className: "",
-    iconSize: [20, 20],
-    iconAnchor: [10, 10],
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
   });
 }
 
@@ -69,8 +71,7 @@ function MapTapHandler({ onTap, enabled }: { onTap: (lat: number, lng: number) =
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function yardsToMeters(y: number | null): string {
-  if (y === null) return "";
-  return String(Math.round(y * 0.9144));
+  return y === null ? "" : String(Math.round(y * 0.9144));
 }
 
 function metersToYards(m: string): number | null {
@@ -78,12 +79,11 @@ function metersToYards(m: string): number | null {
   return isNaN(n) ? null : Math.round(n / 0.9144);
 }
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
 type EditMode = "tee" | "green" | "bunkers";
+type GreenSub = "front" | "middle" | "back";
 type BunkerPhase = null | "front" | "back";
 
-// ─── Main page ────────────────────────────────────────────────────────────────
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
 export function CourseEditorPage() {
   const { id } = useParams<{ id: string }>();
@@ -98,13 +98,12 @@ export function CourseEditorPage() {
   const [currentHole, setCurrentHole] = useState(1);
   const [satellite, setSatellite] = useState(true);
   const [mode, setMode] = useState<EditMode>("tee");
+  const [greenSub, setGreenSub] = useState<GreenSub>("front");
   const [savedFlash, setSavedFlash] = useState<string | null>(null);
 
-  // Bunker add state
   const [bunkerPhase, setBunkerPhase] = useState<BunkerPhase>(null);
   const [bunkerFront, setBunkerFront] = useState<[number, number] | null>(null);
 
-  // Local hole form state
   const [localPar, setLocalPar] = useState(4);
   const [localDist, setLocalDist] = useState("");
 
@@ -114,16 +113,23 @@ export function CourseEditorPage() {
     if (!hole) return;
     setLocalPar(hole.par);
     setLocalDist(yardsToMeters(hole.distance_yards));
-    // Reset bunker add state when switching holes
     setBunkerPhase(null);
     setBunkerFront(null);
   }, [currentHole, course?.id]);
 
   const teePos: [number, number] | null =
     hole?.tee_latitude != null ? [hole.tee_latitude, hole.tee_longitude!] : null;
-  const greenPos: [number, number] | null =
-    hole?.green_latitude != null ? [hole.green_latitude, hole.green_longitude!] : null;
-  const mapCenter: [number, number] = teePos ?? greenPos ?? [52.0, 4.3];
+  const greenFront: [number, number] | null =
+    hole?.green_front_latitude != null ? [hole.green_front_latitude, hole.green_front_longitude!] : null;
+  const greenMiddle: [number, number] | null =
+    hole?.green_middle_latitude != null ? [hole.green_middle_latitude, hole.green_middle_longitude!] : null;
+  const greenBack: [number, number] | null =
+    hole?.green_back_latitude != null ? [hole.green_back_latitude, hole.green_back_longitude!] : null;
+
+  // Line from tee → green middle (or front if no middle)
+  const greenRef = greenMiddle ?? greenFront;
+
+  const mapCenter: [number, number] = teePos ?? greenFront ?? greenMiddle ?? [52.0, 4.3];
 
   function flash(msg: string) {
     setSavedFlash(msg);
@@ -137,9 +143,21 @@ export function CourseEditorPage() {
         { onSuccess: () => flash("Tee saved") }
       );
     } else if (mode === "green") {
+      const fieldMap: Record<GreenSub, object> = {
+        front:  { green_front_latitude: lat, green_front_longitude: lng },
+        middle: { green_middle_latitude: lat, green_middle_longitude: lng },
+        back:   { green_back_latitude: lat, green_back_longitude: lng },
+      };
       updateHole.mutate(
-        { holeNumber: currentHole, data: { green_latitude: lat, green_longitude: lng } },
-        { onSuccess: () => flash("Green saved") }
+        { holeNumber: currentHole, data: fieldMap[greenSub] },
+        {
+          onSuccess: () => {
+            flash(`Green ${greenSub} saved`);
+            // Auto-advance to next sub after saving
+            if (greenSub === "front") setGreenSub("middle");
+            else if (greenSub === "middle") setGreenSub("back");
+          },
+        }
       );
     } else if (mode === "bunkers") {
       if (bunkerPhase === "front") {
@@ -168,33 +186,17 @@ export function CourseEditorPage() {
     }
   }
 
-  function handleParChange(par: 3 | 4 | 5) {
-    setLocalPar(par);
-    updateHole.mutate({ holeNumber: currentHole, data: { par } });
-  }
-
-  function handleDistBlur() {
-    updateHole.mutate({ holeNumber: currentHole, data: { distance_yards: metersToYards(localDist) } });
-  }
-
-  function startBunkerAdd() {
-    setBunkerPhase("front");
-    setBunkerFront(null);
-  }
-
-  function cancelBunkerAdd() {
-    setBunkerPhase(null);
-    setBunkerFront(null);
-  }
-
-  const tapEnabled = mode === "tee" || mode === "green" || (mode === "bunkers" && bunkerPhase !== null);
+  const tapEnabled =
+    mode === "tee" ||
+    mode === "green" ||
+    (mode === "bunkers" && bunkerPhase !== null);
 
   const bannerText =
-    mode === "tee" ? `Tap map to set tee — Hole ${currentHole}` :
-    mode === "green" ? `Tap map to set green — Hole ${currentHole}` :
+    mode === "tee" ? `Tap map — tee for Hole ${currentHole}` :
+    mode === "green" ? `Tap map — green ${greenSub} for Hole ${currentHole}` :
     bunkerPhase === "front" ? "Tap the front edge of the bunker (closest to tee)" :
     bunkerPhase === "back" ? "Tap the back edge of the bunker (furthest from tee)" :
-    null;
+    "Tap \"Add Bunker\" below, then tap front and back edges on the map";
 
   if (isLoading || !course) {
     return (
@@ -206,6 +208,7 @@ export function CourseEditorPage() {
 
   return (
     <div className="flex flex-col h-dvh bg-gray-900">
+
       {/* Top bar */}
       <div className="bg-gray-900 text-white px-4 pt-safe flex items-center justify-between h-14 flex-shrink-0">
         <button onClick={() => navigate("/admin")} className="p-1 -ml-1">
@@ -227,10 +230,7 @@ export function CourseEditorPage() {
       <div className="bg-gray-800 overflow-x-auto flex-shrink-0">
         <div className="flex px-3 py-2 gap-1 min-w-max">
           {course.holes.map((h) => {
-            const hasTee = h.tee_latitude != null;
-            const hasGreen = h.green_latitude != null;
-            const hasBunkers = h.bunkers.length > 0;
-            const dots = [hasTee && "🟢", hasGreen && "⛳", hasBunkers && "🟡"].filter(Boolean);
+            const hasGreen = h.green_front_latitude != null || h.green_middle_latitude != null;
             return (
               <button
                 key={h.hole_number}
@@ -240,9 +240,11 @@ export function CourseEditorPage() {
                 }`}
               >
                 <span>{h.hole_number}</span>
-                {dots.length > 0 && (
-                  <span className="text-[7px] leading-none">{dots.join("")}</span>
-                )}
+                <div className="flex gap-0.5 mt-0.5">
+                  <span className={`w-1.5 h-1.5 rounded-full ${h.tee_latitude != null ? "bg-green-400" : "bg-gray-600"}`} />
+                  <span className={`w-1.5 h-1.5 rounded-full ${hasGreen ? "bg-emerald-300" : "bg-gray-600"}`} />
+                  <span className={`w-1.5 h-1.5 rounded-full ${h.bunkers.length > 0 ? "bg-amber-400" : "bg-gray-600"}`} />
+                </div>
               </button>
             );
           })}
@@ -256,7 +258,7 @@ export function CourseEditorPage() {
           {([3, 4, 5] as const).map((p) => (
             <button
               key={p}
-              onClick={() => handleParChange(p)}
+              onClick={() => { setLocalPar(p); updateHole.mutate({ holeNumber: currentHole, data: { par: p } }); }}
               className={`w-8 h-7 rounded text-xs font-semibold transition-colors ${
                 localPar === p ? "bg-green-600 text-white" : "bg-gray-700 text-gray-300"
               }`}
@@ -273,7 +275,7 @@ export function CourseEditorPage() {
             placeholder="—"
             value={localDist}
             onChange={(e) => setLocalDist(e.target.value)}
-            onBlur={handleDistBlur}
+            onBlur={() => updateHole.mutate({ holeNumber: currentHole, data: { distance_yards: metersToYards(localDist) } })}
             className="w-16 px-2 py-1 text-xs text-white bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:border-green-500"
           />
           <span className="text-xs text-gray-500">m</span>
@@ -289,26 +291,51 @@ export function CourseEditorPage() {
       <div className="bg-gray-800 border-t border-gray-700 flex flex-shrink-0">
         {(["tee", "green", "bunkers"] as EditMode[]).map((m) => {
           const label = m === "tee" ? "Tee" : m === "green" ? "Green" : "Bunkers";
-          const count = m === "bunkers" ? hole?.bunkers.length : null;
+          const badge = m === "bunkers" && (hole?.bunkers.length ?? 0) > 0 ? hole!.bunkers.length : null;
           return (
             <button
               key={m}
-              onClick={() => { setMode(m); cancelBunkerAdd(); }}
-              className={`flex-1 py-2 text-xs font-semibold transition-colors border-b-2 ${
+              onClick={() => { setMode(m); setBunkerPhase(null); setBunkerFront(null); }}
+              className={`flex-1 py-2 text-xs font-semibold border-b-2 transition-colors ${
                 mode === m ? "text-white border-green-500" : "text-gray-400 border-transparent"
               }`}
             >
               {label}
-              {count != null && count > 0 && (
-                <span className="ml-1 bg-amber-500 text-white text-[9px] rounded-full px-1">{count}</span>
+              {badge != null && (
+                <span className="ml-1 bg-amber-500 text-white text-[9px] rounded-full px-1">{badge}</span>
               )}
             </button>
           );
         })}
       </div>
 
+      {/* Green sub-mode selector (only in green mode) */}
+      {mode === "green" && (
+        <div className="bg-gray-900 border-t border-gray-700 flex gap-1 px-3 py-2 flex-shrink-0">
+          {(["front", "middle", "back"] as GreenSub[]).map((sub) => {
+            const pos = sub === "front" ? greenFront : sub === "middle" ? greenMiddle : greenBack;
+            return (
+              <button
+                key={sub}
+                onClick={() => setGreenSub(sub)}
+                className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-colors relative ${
+                  greenSub === sub
+                    ? "bg-green-600 text-white"
+                    : "bg-gray-700 text-gray-300"
+                }`}
+              >
+                {sub.charAt(0).toUpperCase() + sub.slice(1)}
+                {pos && (
+                  <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-green-300" />
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {/* Map */}
-      <div className="relative flex-shrink-0" style={{ height: "45vh" }}>
+      <div className="relative flex-shrink-0" style={{ height: mode === "green" ? "40vh" : "45vh" }}>
         <MapContainer
           center={mapCenter}
           zoom={17}
@@ -321,46 +348,51 @@ export function CourseEditorPage() {
           ) : (
             <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
           )}
-          <MapCenterUpdater center={teePos ?? greenPos} />
+          <MapCenterUpdater center={teePos ?? greenFront ?? greenMiddle} />
           <MapTapHandler onTap={handleMapTap} enabled={tapEnabled} />
 
-          {/* Tee-to-green line */}
-          {teePos && greenPos && (
+          {/* Tee → green reference line */}
+          {teePos && greenRef && (
             <Polyline
-              positions={[teePos, greenPos]}
-              pathOptions={{ color: "#ffffff", weight: 2, opacity: 0.4, dashArray: "6 4" }}
+              positions={[teePos, greenRef]}
+              pathOptions={{ color: "#ffffff", weight: 2, opacity: 0.35, dashArray: "6 4" }}
             />
           )}
 
-          {/* Tee marker */}
+          {/* Green front → middle → back line */}
+          {[greenFront, greenMiddle, greenBack].filter(Boolean).length >= 2 && (
+            <Polyline
+              positions={[greenFront, greenMiddle, greenBack].filter((p): p is [number, number] => p !== null)}
+              pathOptions={{ color: "#4ade80", weight: 3, opacity: 0.8 }}
+            />
+          )}
+
+          {/* Tee */}
           {teePos && <Marker position={teePos} icon={createTeeIcon()} />}
 
-          {/* Green marker */}
-          {greenPos && <Marker position={greenPos} icon={createGreenIcon()} />}
+          {/* Green points */}
+          {greenFront && <Marker position={greenFront} icon={createGreenPointIcon("F", mode === "green" && greenSub === "front")} />}
+          {greenMiddle && <Marker position={greenMiddle} icon={createGreenPointIcon("M", mode === "green" && greenSub === "middle")} />}
+          {greenBack && <Marker position={greenBack} icon={createGreenPointIcon("B", mode === "green" && greenSub === "back")} />}
 
-          {/* Bunker markers */}
+          {/* Bunkers */}
           {hole?.bunkers.map((b, i) => (
             <BunkerMarkers key={b.id} bunker={b} index={i + 1} />
           ))}
 
-          {/* Temporary bunker-front marker while placing back */}
+          {/* Temp bunker-front while placing back */}
           {bunkerFront && <Marker position={bunkerFront} icon={createTempIcon("F")} />}
         </MapContainer>
 
         {/* Banner */}
-        {bannerText && (
-          <div className="absolute bottom-0 inset-x-0 z-[1000] bg-black/70 text-white text-xs text-center py-2 px-4 flex items-center justify-between">
-            <span>{bannerText}</span>
-            {bunkerPhase && (
-              <button onClick={cancelBunkerAdd} className="text-xs text-gray-300 underline ml-3">Cancel</button>
-            )}
-          </div>
-        )}
-        {!bannerText && (
-          <div className="absolute bottom-0 inset-x-0 z-[1000] bg-black/50 text-gray-300 text-xs text-center py-1.5 px-4">
-            {mode === "bunkers" ? "Use \"Add Bunker\" below, or switch tab to edit tee / green" : `Tap map to set ${mode} for Hole ${currentHole}`}
-          </div>
-        )}
+        <div className="absolute bottom-0 inset-x-0 z-[1000] bg-black/60 text-white text-xs text-center py-1.5 px-4 flex items-center justify-between">
+          <span>{bannerText}</span>
+          {bunkerPhase && (
+            <button onClick={() => { setBunkerPhase(null); setBunkerFront(null); }} className="text-xs text-gray-300 underline ml-3 flex-shrink-0">
+              Cancel
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Bottom panel */}
@@ -368,12 +400,9 @@ export function CourseEditorPage() {
         {mode === "bunkers" ? (
           <BunkersPanel
             hole={hole}
-            courseId={courseId}
-            onAdd={startBunkerAdd}
+            onAdd={() => setBunkerPhase("front")}
             isAdding={bunkerPhase !== null}
-            deleteBunkerMutate={(bunkerId) =>
-              deleteBunker.mutate({ holeNumber: currentHole, bunkerId })
-            }
+            onDelete={(bunkerId) => deleteBunker.mutate({ holeNumber: currentHole, bunkerId })}
           />
         ) : (
           <HoleOverview course={course} currentHole={currentHole} onSelectHole={setCurrentHole} />
@@ -383,23 +412,19 @@ export function CourseEditorPage() {
   );
 }
 
-// ─── Bunker markers (front + back + line) ────────────────────────────────────
+// ─── Bunker markers ───────────────────────────────────────────────────────────
 
 function BunkerMarkers({ bunker, index }: { bunker: CourseHoleBunker; index: number }) {
   const frontPos: [number, number] | null =
     bunker.front_latitude != null ? [bunker.front_latitude, bunker.front_longitude!] : null;
   const backPos: [number, number] | null =
     bunker.back_latitude != null ? [bunker.back_latitude, bunker.back_longitude!] : null;
-
   return (
     <>
       {frontPos && <Marker position={frontPos} icon={createBunkerIcon(`${index}F`)} />}
       {backPos && <Marker position={backPos} icon={createBunkerIcon(`${index}B`)} />}
       {frontPos && backPos && (
-        <Polyline
-          positions={[frontPos, backPos]}
-          pathOptions={{ color: "#d97706", weight: 2, opacity: 0.8, dashArray: "4 3" }}
-        />
+        <Polyline positions={[frontPos, backPos]} pathOptions={{ color: "#d97706", weight: 2, opacity: 0.8, dashArray: "4 3" }} />
       )}
     </>
   );
@@ -409,19 +434,16 @@ function BunkerMarkers({ bunker, index }: { bunker: CourseHoleBunker; index: num
 
 function BunkersPanel({
   hole,
-  courseId: _courseId,
   onAdd,
   isAdding,
-  deleteBunkerMutate,
+  onDelete,
 }: {
   hole: CourseHoleTemplate | undefined;
-  courseId: number;
   onAdd: () => void;
   isAdding: boolean;
-  deleteBunkerMutate: (bunkerId: number) => void;
+  onDelete: (id: number) => void;
 }) {
   const bunkers = hole?.bunkers ?? [];
-
   return (
     <div className="px-4 py-4">
       <div className="flex items-center justify-between mb-3">
@@ -429,7 +451,9 @@ function BunkersPanel({
           Bunkers — Hole {hole?.hole_number}
           <span className="ml-2 text-xs font-normal text-gray-400">{bunkers.length} saved</span>
         </p>
-        {!isAdding && (
+        {isAdding ? (
+          <span className="text-xs text-amber-600 font-semibold animate-pulse">Tap on map…</span>
+        ) : (
           <button
             onClick={onAdd}
             className="flex items-center gap-1 px-3 py-1.5 bg-amber-500 text-white rounded-lg text-xs font-semibold"
@@ -437,15 +461,11 @@ function BunkersPanel({
             <Plus className="w-3.5 h-3.5" /> Add Bunker
           </button>
         )}
-        {isAdding && (
-          <span className="text-xs text-amber-600 font-semibold animate-pulse">Tap on map…</span>
-        )}
       </div>
-
       {bunkers.length === 0 ? (
-        <div className="text-center py-8 text-sm text-gray-400">
-          No bunkers mapped yet. Tap "Add Bunker" then tap the front and back edges on the map.
-        </div>
+        <p className="text-center py-8 text-sm text-gray-400">
+          No bunkers yet. Tap "Add Bunker" then tap front and back edges on the map.
+        </p>
       ) : (
         <div className="space-y-2">
           {bunkers.map((b, i) => (
@@ -457,16 +477,11 @@ function BunkersPanel({
                 <div>
                   <p className="text-sm font-medium text-gray-700">{b.label ?? `Bunker ${i + 1}`}</p>
                   <p className="text-xs text-gray-400">
-                    {b.front_latitude != null ? `F: ${b.front_latitude.toFixed(5)}, ${b.front_longitude!.toFixed(5)}` : "Front not set"}
-                    {" · "}
-                    {b.back_latitude != null ? `B: ${b.back_latitude.toFixed(5)}, ${b.back_longitude!.toFixed(5)}` : "Back not set"}
+                    {b.front_latitude != null ? "Front set" : "No front"} · {b.back_latitude != null ? "Back set" : "No back"}
                   </p>
                 </div>
               </div>
-              <button
-                onClick={() => deleteBunkerMutate(b.id)}
-                className="p-1.5 text-gray-300 hover:text-red-400 transition-colors"
-              >
+              <button onClick={() => onDelete(b.id)} className="p-1.5 text-gray-300 hover:text-red-400">
                 <Trash2 className="w-4 h-4" />
               </button>
             </div>
@@ -477,7 +492,7 @@ function BunkersPanel({
   );
 }
 
-// ─── Hole overview grid (shown when mode = tee or green) ─────────────────────
+// ─── Hole overview grid ───────────────────────────────────────────────────────
 
 function HoleOverview({
   course,
@@ -492,31 +507,37 @@ function HoleOverview({
     <div className="px-4 py-4">
       <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">All Holes</p>
       <div className="grid grid-cols-3 gap-2">
-        {course.holes.map((h) => (
-          <button
-            key={h.hole_number}
-            onClick={() => onSelectHole(h.hole_number)}
-            className={`flex flex-col items-start p-2.5 rounded-xl border text-left transition-colors ${
-              h.hole_number === currentHole ? "border-green-500 bg-green-50" : "border-gray-100 bg-gray-50"
-            }`}
-          >
-            <div className="flex items-center justify-between w-full">
-              <span className="text-xs font-bold text-gray-700">Hole {h.hole_number}</span>
-              <div className="flex gap-0.5">
-                <span className={`w-2 h-2 rounded-full ${h.tee_latitude != null ? "bg-green-500" : "bg-gray-200"}`} title="Tee" />
-                <span className={`w-2 h-2 rounded-full ${h.green_latitude != null ? "bg-green-600" : "bg-gray-200"}`} title="Green" />
-                <span className={`w-2 h-2 rounded-full ${h.bunkers.length > 0 ? "bg-amber-400" : "bg-gray-200"}`} title="Bunkers" />
+        {course.holes.map((h) => {
+          const greenPoints = [h.green_front_latitude, h.green_middle_latitude, h.green_back_latitude].filter(Boolean).length;
+          return (
+            <button
+              key={h.hole_number}
+              onClick={() => onSelectHole(h.hole_number)}
+              className={`flex flex-col items-start p-2.5 rounded-xl border text-left transition-colors ${
+                h.hole_number === currentHole ? "border-green-500 bg-green-50" : "border-gray-100 bg-gray-50"
+              }`}
+            >
+              <div className="flex items-center justify-between w-full">
+                <span className="text-xs font-bold text-gray-700">Hole {h.hole_number}</span>
+                <div className="flex gap-0.5">
+                  <span className={`w-2 h-2 rounded-full ${h.tee_latitude != null ? "bg-green-500" : "bg-gray-200"}`} />
+                  <span className={`w-2 h-2 rounded-full ${greenPoints > 0 ? "bg-emerald-400" : "bg-gray-200"}`} />
+                  <span className={`w-2 h-2 rounded-full ${h.bunkers.length > 0 ? "bg-amber-400" : "bg-gray-200"}`} />
+                </div>
               </div>
-            </div>
-            <span className="text-[10px] text-gray-400 mt-0.5">
-              Par {h.par}{h.distance_yards ? ` · ${Math.round(h.distance_yards * 0.9144)}m` : ""}
-            </span>
-          </button>
-        ))}
+              <span className="text-[10px] text-gray-400 mt-0.5">
+                Par {h.par}{h.distance_yards ? ` · ${Math.round(h.distance_yards * 0.9144)}m` : ""}
+              </span>
+              {greenPoints > 0 && (
+                <span className="text-[9px] text-emerald-500 mt-0.5">{greenPoints}/3 green pts</span>
+              )}
+            </button>
+          );
+        })}
       </div>
       <div className="flex items-center gap-4 mt-4 text-[10px] text-gray-400">
         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" /> Tee</span>
-        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-600 inline-block" /> Green</span>
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" /> Green</span>
         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400 inline-block" /> Bunkers</span>
       </div>
     </div>

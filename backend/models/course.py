@@ -30,8 +30,12 @@ class CourseHoleTemplate(TimestampMixin, Base):
     stroke_index: Mapped[int | None] = mapped_column(Integer, default=None)
     tee_latitude: Mapped[float | None] = mapped_column(Float, default=None)
     tee_longitude: Mapped[float | None] = mapped_column(Float, default=None)
-    green_latitude: Mapped[float | None] = mapped_column(Float, default=None)
-    green_longitude: Mapped[float | None] = mapped_column(Float, default=None)
+    green_front_latitude: Mapped[float | None] = mapped_column(Float, default=None)
+    green_front_longitude: Mapped[float | None] = mapped_column(Float, default=None)
+    green_middle_latitude: Mapped[float | None] = mapped_column(Float, default=None)
+    green_middle_longitude: Mapped[float | None] = mapped_column(Float, default=None)
+    green_back_latitude: Mapped[float | None] = mapped_column(Float, default=None)
+    green_back_longitude: Mapped[float | None] = mapped_column(Float, default=None)
 
     course: Mapped["CourseTemplate"] = relationship(back_populates="holes")
     bunkers: Mapped[list["CourseHoleBunker"]] = relationship(

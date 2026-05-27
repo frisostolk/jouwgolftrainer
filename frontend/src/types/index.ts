@@ -237,8 +237,12 @@ export interface CourseHoleTemplate {
   stroke_index: number | null;
   tee_latitude: number | null;
   tee_longitude: number | null;
-  green_latitude: number | null;
-  green_longitude: number | null;
+  green_front_latitude: number | null;
+  green_front_longitude: number | null;
+  green_middle_latitude: number | null;
+  green_middle_longitude: number | null;
+  green_back_latitude: number | null;
+  green_back_longitude: number | null;
   bunkers: CourseHoleBunker[];
 }
 

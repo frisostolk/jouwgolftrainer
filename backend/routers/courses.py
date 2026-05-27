@@ -66,7 +66,7 @@ async def lookup_course(
 @router.get("", response_model=list[CourseTemplateSummary])
 async def list_courses(
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_superuser),
+    _: User = Depends(get_current_user),
 ):
     result = await db.execute(
         select(CourseTemplate).order_by(CourseTemplate.name)

@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronLeft, Flag, Sparkles } from "lucide-react";
+import { ChevronLeft, Flag, ChevronRight, PenLine, Map } from "lucide-react";
 import { Button } from "../components/Button";
 import { Input } from "../components/Input";
 import { useCreateRound } from "../hooks/useRounds";
+import { useCourses } from "../hooks/useCourses";
 import { coursesApi } from "../api/courses";
 import type { HoleSetup } from "../api/rounds";
 
@@ -18,47 +19,79 @@ function defaultHoles(total: number): HoleSetup[] {
   }));
 }
 
+type Step = "select" | "info" | "holes";
+
 export function NewRoundPage() {
   const navigate = useNavigate();
   const createRound = useCreateRound();
+  const { data: courses, isLoading: coursesLoading } = useCourses();
 
+  const [step, setStep] = useState<Step>("select");
   const [courseName, setCourseName] = useState("");
   const [teeColor, setTeeColor] = useState<string | undefined>();
   const [totalHoles, setTotalHoles] = useState<9 | 18>(18);
   const [holes, setHoles] = useState<HoleSetup[]>(defaultHoles(18));
-  const [step, setStep] = useState<"info" | "holes">("info");
-  const [templateLoaded, setTemplateLoaded] = useState(false);
+  const [fromTemplate, setFromTemplate] = useState(false);
 
-  function handleTotalHolesChange(n: 9 | 18) {
-    setTotalHoles(n);
-    setHoles(defaultHoles(n));
+  // ─── Handlers ───────────────────────────────────────────────────────────────
+
+  async function selectTemplate(name: string) {
+    try {
+      const template = await coursesApi.lookup(name);
+      const n = template.total_holes as 9 | 18;
+      setCourseName(template.name);
+      setTotalHoles(n);
+      setHoles(
+        Array.from({ length: n }, (_, i) => {
+          const th = template.holes.find((h) => h.hole_number === i + 1);
+          return {
+            hole_number: i + 1,
+            par: th?.par ?? 4,
+            distance_yards: th?.distance_yards ?? undefined,
+          };
+        })
+      );
+      setFromTemplate(true);
+    } catch {
+      setCourseName(name);
+      setTotalHoles(18);
+      setHoles(defaultHoles(18));
+      setFromTemplate(false);
+    }
+    setTeeColor(undefined);
+    setStep("holes");
   }
 
-  function setAllPar(par: 3 | 4 | 5) {
-    setHoles((prev) => prev.map((h) => ({ ...h, par })));
+  function goCustom() {
+    setCourseName("");
+    setTotalHoles(18);
+    setHoles(defaultHoles(18));
+    setFromTemplate(false);
+    setTeeColor(undefined);
+    setStep("info");
   }
 
-  function setHolePar(holeNumber: number, par: 3 | 4 | 5) {
-    setHoles((prev) =>
-      prev.map((h) => (h.hole_number === holeNumber ? { ...h, par } : h))
-    );
-  }
-
-  function setHoleDist(holeNumber: number, dist: string) {
-    const meters = parseInt(dist);
-    // Store internally as yards (backend unit) by converting from meters
-    const yards = isNaN(meters) ? undefined : Math.round(meters / 0.9144);
-    setHoles((prev) =>
-      prev.map((h) =>
-        h.hole_number === holeNumber ? { ...h, distance_yards: yards } : h
-      )
-    );
-  }
-
-  // Display value for hole distance input (stored as yards, shown as meters)
-  function displayDist(yards: number | undefined) {
-    if (yards === undefined) return "";
-    return String(Math.round(yards * 0.9144));
+  async function handleInfoNext() {
+    if (!courseName.trim()) return;
+    try {
+      const template = await coursesApi.lookup(courseName.trim());
+      const n = template.total_holes as 9 | 18;
+      setTotalHoles(n);
+      setHoles(
+        Array.from({ length: n }, (_, i) => {
+          const th = template.holes.find((h) => h.hole_number === i + 1);
+          return {
+            hole_number: i + 1,
+            par: th?.par ?? 4,
+            distance_yards: th?.distance_yards ?? undefined,
+          };
+        })
+      );
+      setFromTemplate(true);
+    } catch {
+      setFromTemplate(false);
+    }
+    setStep("holes");
   }
 
   async function handleStart() {
@@ -72,26 +105,113 @@ export function NewRoundPage() {
     navigate(`/rounds/${r.id}`, { replace: true });
   }
 
+  function setHolePar(holeNumber: number, par: 3 | 4 | 5) {
+    setHoles((prev) => prev.map((h) => (h.hole_number === holeNumber ? { ...h, par } : h)));
+  }
+
+  function setHoleDist(holeNumber: number, dist: string) {
+    const meters = parseInt(dist);
+    const yards = isNaN(meters) ? undefined : Math.round(meters / 0.9144);
+    setHoles((prev) => prev.map((h) => (h.hole_number === holeNumber ? { ...h, distance_yards: yards } : h)));
+  }
+
+  function displayDist(yards: number | undefined) {
+    return yards === undefined ? "" : String(Math.round(yards * 0.9144));
+  }
+
   const totalPar = holes.reduce((s, h) => s + h.par, 0);
+
+  function goBack() {
+    if (step === "holes") setStep(fromTemplate ? "select" : "info");
+    else if (step === "info") setStep("select");
+    else navigate(-1);
+  }
+
+  // ─── Render ──────────────────────────────────────────────────────────────────
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
       <div className="bg-white border-b border-gray-200 px-4 pt-safe">
         <div className="flex items-center gap-3 h-14">
-          <button onClick={() => (step === "holes" ? setStep("info") : navigate(-1))} className="p-1 -ml-1">
+          <button onClick={goBack} className="p-1 -ml-1">
             <ChevronLeft className="w-5 h-5 text-gray-600" />
           </button>
           <div className="flex items-center gap-2">
             <Flag className="w-5 h-5 text-green-700" />
             <h1 className="text-lg font-semibold">
-              {step === "info" ? "New Round" : "Hole Setup"}
+              {step === "select" ? "New Round" : step === "info" ? "Custom Round" : "Hole Setup"}
             </h1>
           </div>
         </div>
       </div>
 
-      {step === "info" ? (
+      {/* ── Step: select ─────────────────────────────────────────────────────── */}
+      {step === "select" && (
+        <div className="px-4 py-5 space-y-4">
+
+          {/* Course list */}
+          {coursesLoading ? (
+            <div className="flex justify-center py-10">
+              <div className="animate-spin w-6 h-6 border-2 border-green-600 border-t-transparent rounded-full" />
+            </div>
+          ) : courses && courses.length > 0 ? (
+            <div>
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">
+                Select Course
+              </p>
+              <div className="space-y-2">
+                {courses.map((c) => (
+                  <button
+                    key={c.id}
+                    onClick={() => selectTemplate(c.name)}
+                    className="w-full flex items-center justify-between bg-white rounded-xl border border-gray-100 px-4 py-3.5 text-left active:bg-gray-50"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-full bg-green-50 flex items-center justify-center flex-shrink-0">
+                        <Map className="w-4 h-4 text-green-700" />
+                      </div>
+                      <div>
+                        <p className="font-semibold text-gray-900">{c.name}</p>
+                        <p className="text-xs text-gray-400">{c.total_holes} holes</p>
+                      </div>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-gray-300 flex-shrink-0" />
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {/* Divider */}
+          {courses && courses.length > 0 && (
+            <div className="flex items-center gap-3">
+              <div className="flex-1 h-px bg-gray-200" />
+              <span className="text-xs text-gray-400">or</span>
+              <div className="flex-1 h-px bg-gray-200" />
+            </div>
+          )}
+
+          {/* Custom round */}
+          <button
+            onClick={goCustom}
+            className="w-full flex items-center justify-between bg-white rounded-xl border border-gray-100 px-4 py-3.5 text-left active:bg-gray-50"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
+                <PenLine className="w-4 h-4 text-gray-500" />
+              </div>
+              <div>
+                <p className="font-semibold text-gray-700">Custom Round</p>
+                <p className="text-xs text-gray-400">Enter course name manually</p>
+              </div>
+            </div>
+            <ChevronRight className="w-4 h-4 text-gray-300 flex-shrink-0" />
+          </button>
+        </div>
+      )}
+
+      {/* ── Step: info (custom) ───────────────────────────────────────────────── */}
+      {step === "info" && (
         <div className="px-4 py-6 space-y-6">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Course Name</label>
@@ -104,7 +224,50 @@ export function NewRoundPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Tee Color (optional)</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Number of Holes</label>
+            <div className="flex gap-2">
+              {([9, 18] as const).map((n) => (
+                <button
+                  key={n}
+                  onClick={() => { setTotalHoles(n); setHoles(defaultHoles(n)); }}
+                  className={`flex-1 py-2 rounded-lg text-sm font-semibold border transition-colors ${
+                    totalHoles === n
+                      ? "bg-green-700 text-white border-green-700"
+                      : "bg-white text-gray-700 border-gray-300"
+                  }`}
+                >
+                  {n} Holes
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <Button className="w-full" disabled={!courseName.trim()} onClick={handleInfoNext}>
+            Set Up Holes
+          </Button>
+        </div>
+      )}
+
+      {/* ── Step: holes ───────────────────────────────────────────────────────── */}
+      {step === "holes" && (
+        <div className="px-4 py-4">
+
+          {/* Course name + template badge */}
+          <div className="flex items-center gap-2 mb-4">
+            <div className="flex-1">
+              <p className="text-sm font-medium text-gray-500 mb-0.5">Course</p>
+              <p className="font-semibold text-gray-900">{courseName}</p>
+            </div>
+            {fromTemplate && (
+              <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">
+                Template
+              </span>
+            )}
+          </div>
+
+          {/* Tee color */}
+          <div className="mb-4">
+            <p className="text-sm font-medium text-gray-700 mb-2">Tee Color (optional)</p>
             <div className="flex flex-wrap gap-2">
               {TEE_COLORS.map((c) => (
                 <button
@@ -122,68 +285,8 @@ export function NewRoundPage() {
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Number of Holes</label>
-            <div className="flex gap-2">
-              {([9, 18] as const).map((n) => (
-                <button
-                  key={n}
-                  onClick={() => handleTotalHolesChange(n)}
-                  className={`flex-1 py-2 rounded-lg text-sm font-semibold border transition-colors ${
-                    totalHoles === n
-                      ? "bg-green-700 text-white border-green-700"
-                      : "bg-white text-gray-700 border-gray-300"
-                  }`}
-                >
-                  {n} Holes
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <Button
-            className="w-full"
-            disabled={!courseName.trim()}
-            onClick={async () => {
-              try {
-                const template = await coursesApi.lookup(courseName.trim());
-                // Pre-fill holes from template
-                const templateHoles = Object.fromEntries(template.holes.map((h) => [h.hole_number, h]));
-                const newTotal = template.total_holes as 9 | 18;
-                setTotalHoles(newTotal);
-                setHoles(
-                  Array.from({ length: newTotal }, (_, i) => {
-                    const th = templateHoles[i + 1];
-                    return {
-                      hole_number: i + 1,
-                      par: th?.par ?? 4,
-                      distance_yards: th?.distance_yards ?? undefined,
-                    };
-                  })
-                );
-                setTemplateLoaded(true);
-              } catch {
-                // No template found — proceed with defaults
-                setTemplateLoaded(false);
-              }
-              setStep("holes");
-            }}
-          >
-            Set Up Holes
-          </Button>
-        </div>
-      ) : (
-        <div className="px-4 py-4">
-          {/* Template pre-fill notice */}
-          {templateLoaded && (
-            <div className="flex items-center gap-2 mb-3 px-3 py-2 bg-green-50 border border-green-200 rounded-xl text-sm text-green-700">
-              <Sparkles className="w-4 h-4 flex-shrink-0" />
-              Par &amp; distances pre-filled from course template
-            </div>
-          )}
-
-          {/* Quick presets */}
-          <div className="flex items-center justify-between mb-4">
+          {/* Par total + presets */}
+          <div className="flex items-center justify-between mb-3">
             <p className="text-sm text-gray-500">
               Par total: <span className="font-semibold text-gray-800">{totalPar}</span>
             </p>
@@ -192,8 +295,8 @@ export function NewRoundPage() {
               {PAR_OPTIONS.map((p) => (
                 <button
                   key={p}
-                  onClick={() => setAllPar(p)}
-                  className="px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700 hover:bg-gray-200"
+                  onClick={() => setHoles((prev) => prev.map((h) => ({ ...h, par: p })))}
+                  className="px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700"
                 >
                   Par {p}
                 </button>
@@ -206,25 +309,19 @@ export function NewRoundPage() {
             {holes.map((hole) => (
               <div key={hole.hole_number} className="flex items-center gap-3 bg-white rounded-xl px-3 py-2 border border-gray-100">
                 <span className="w-8 text-sm font-semibold text-gray-600">#{hole.hole_number}</span>
-
-                {/* Par selector */}
                 <div className="flex gap-1">
                   {PAR_OPTIONS.map((p) => (
                     <button
                       key={p}
                       onClick={() => setHolePar(hole.hole_number, p)}
                       className={`w-8 h-7 rounded text-xs font-semibold transition-colors ${
-                        hole.par === p
-                          ? "bg-green-700 text-white"
-                          : "bg-gray-100 text-gray-600"
+                        hole.par === p ? "bg-green-700 text-white" : "bg-gray-100 text-gray-600"
                       }`}
                     >
                       {p}
                     </button>
                   ))}
                 </div>
-
-                {/* Distance input */}
                 <div className="flex-1 flex items-center gap-1">
                   <input
                     type="number"
@@ -240,11 +337,7 @@ export function NewRoundPage() {
             ))}
           </div>
 
-          <Button
-            className="w-full"
-            onClick={handleStart}
-            disabled={createRound.isPending}
-          >
+          <Button className="w-full" onClick={handleStart} disabled={createRound.isPending}>
             {createRound.isPending ? "Starting…" : "Start Round"}
           </Button>
         </div>

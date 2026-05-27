@@ -36,8 +36,12 @@ class CourseHoleTemplateUpdate(BaseModel):
     stroke_index: Optional[int] = None
     tee_latitude: Optional[float] = None
     tee_longitude: Optional[float] = None
-    green_latitude: Optional[float] = None
-    green_longitude: Optional[float] = None
+    green_front_latitude: Optional[float] = None
+    green_front_longitude: Optional[float] = None
+    green_middle_latitude: Optional[float] = None
+    green_middle_longitude: Optional[float] = None
+    green_back_latitude: Optional[float] = None
+    green_back_longitude: Optional[float] = None
 
 
 class CourseHoleTemplateResponse(BaseModel):
@@ -48,8 +52,12 @@ class CourseHoleTemplateResponse(BaseModel):
     stroke_index: Optional[int]
     tee_latitude: Optional[float]
     tee_longitude: Optional[float]
-    green_latitude: Optional[float]
-    green_longitude: Optional[float]
+    green_front_latitude: Optional[float]
+    green_front_longitude: Optional[float]
+    green_middle_latitude: Optional[float]
+    green_middle_longitude: Optional[float]
+    green_back_latitude: Optional[float]
+    green_back_longitude: Optional[float]
     bunkers: list[CourseHoleBunkerResponse] = []
 
     model_config = {"from_attributes": True}

@@ -19,8 +19,12 @@ async def lifespan(app: FastAPI):
         for stmt in [
             "ALTER TABLE round_holes ADD COLUMN IF NOT EXISTS tee_latitude FLOAT",
             "ALTER TABLE round_holes ADD COLUMN IF NOT EXISTS tee_longitude FLOAT",
-            "ALTER TABLE course_hole_templates ADD COLUMN IF NOT EXISTS green_latitude FLOAT",
-            "ALTER TABLE course_hole_templates ADD COLUMN IF NOT EXISTS green_longitude FLOAT",
+            "ALTER TABLE course_hole_templates ADD COLUMN IF NOT EXISTS green_front_latitude FLOAT",
+            "ALTER TABLE course_hole_templates ADD COLUMN IF NOT EXISTS green_front_longitude FLOAT",
+            "ALTER TABLE course_hole_templates ADD COLUMN IF NOT EXISTS green_middle_latitude FLOAT",
+            "ALTER TABLE course_hole_templates ADD COLUMN IF NOT EXISTS green_middle_longitude FLOAT",
+            "ALTER TABLE course_hole_templates ADD COLUMN IF NOT EXISTS green_back_latitude FLOAT",
+            "ALTER TABLE course_hole_templates ADD COLUMN IF NOT EXISTS green_back_longitude FLOAT",
         ]:
             try:
                 await conn.execute(text(stmt))
