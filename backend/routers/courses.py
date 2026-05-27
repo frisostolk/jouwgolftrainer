@@ -3,10 +3,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 from database import get_db
-from models.course import CourseTemplate, CourseHoleTemplate
+from models.course import CourseTemplate, CourseHoleTemplate, CourseHoleBunker
 from schemas.course import (
     CourseTemplateCreate, CourseTemplateResponse, CourseTemplateSummary,
     CourseHoleTemplateUpdate, CourseHoleTemplateResponse,
+    CourseHoleBunkerCreate, CourseHoleBunkerUpdate, CourseHoleBunkerResponse,
 )
 from auth.dependencies import get_current_superuser, get_current_user
 from models.user import User
@@ -14,16 +15,35 @@ from models.user import User
 router = APIRouter()
 
 
+def _hole_options():
+    return selectinload(CourseTemplate.holes).selectinload(CourseHoleTemplate.bunkers)
+
+
 async def _get_course_or_404(course_id: int, db: AsyncSession) -> CourseTemplate:
     result = await db.execute(
         select(CourseTemplate)
         .where(CourseTemplate.id == course_id)
-        .options(selectinload(CourseTemplate.holes))
+        .options(_hole_options())
     )
     c = result.scalar_one_or_none()
     if not c:
         raise HTTPException(404, "Course template not found")
     return c
+
+
+async def _get_hole_or_404(course_id: int, hole_number: int, db: AsyncSession) -> CourseHoleTemplate:
+    result = await db.execute(
+        select(CourseHoleTemplate)
+        .where(
+            CourseHoleTemplate.course_id == course_id,
+            CourseHoleTemplate.hole_number == hole_number,
+        )
+        .options(selectinload(CourseHoleTemplate.bunkers))
+    )
+    hole = result.scalar_one_or_none()
+    if not hole:
+        raise HTTPException(404, "Hole not found")
+    return hole
 
 
 @router.get("/lookup", response_model=CourseTemplateResponse)
@@ -35,7 +55,7 @@ async def lookup_course(
     result = await db.execute(
         select(CourseTemplate)
         .where(func.lower(CourseTemplate.name) == func.lower(name))
-        .options(selectinload(CourseTemplate.holes))
+        .options(_hole_options())
     )
     c = result.scalar_one_or_none()
     if not c:
@@ -94,21 +114,72 @@ async def update_course_hole(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_superuser),
 ):
-    result = await db.execute(
-        select(CourseHoleTemplate).where(
-            CourseHoleTemplate.course_id == course_id,
-            CourseHoleTemplate.hole_number == hole_number,
-        )
-    )
-    hole = result.scalar_one_or_none()
-    if not hole:
-        raise HTTPException(404, "Hole not found")
-
+    hole = await _get_hole_or_404(course_id, hole_number, db)
     for field, value in data.model_dump(exclude_none=True).items():
         setattr(hole, field, value)
     await db.flush()
-    await db.refresh(hole)
+    await db.refresh(hole, ["bunkers"])
     return hole
+
+
+# ─── Bunker endpoints ────────────────────────────────────────────────────────
+
+@router.post("/{course_id}/holes/{hole_number}/bunkers", response_model=CourseHoleBunkerResponse, status_code=201)
+async def add_bunker(
+    course_id: int,
+    hole_number: int,
+    data: CourseHoleBunkerCreate,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_superuser),
+):
+    hole = await _get_hole_or_404(course_id, hole_number, db)
+    bunker = CourseHoleBunker(
+        hole_id=hole.id,
+        label=data.label,
+        front_latitude=data.front_latitude,
+        front_longitude=data.front_longitude,
+        back_latitude=data.back_latitude,
+        back_longitude=data.back_longitude,
+    )
+    db.add(bunker)
+    await db.flush()
+    await db.refresh(bunker)
+    return bunker
+
+
+@router.put("/{course_id}/holes/{hole_number}/bunkers/{bunker_id}", response_model=CourseHoleBunkerResponse)
+async def update_bunker(
+    course_id: int,
+    hole_number: int,
+    bunker_id: int,
+    data: CourseHoleBunkerUpdate,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_superuser),
+):
+    hole = await _get_hole_or_404(course_id, hole_number, db)
+    bunker = next((b for b in hole.bunkers if b.id == bunker_id), None)
+    if not bunker:
+        raise HTTPException(404, "Bunker not found")
+    for field, value in data.model_dump(exclude_none=True).items():
+        setattr(bunker, field, value)
+    await db.flush()
+    await db.refresh(bunker)
+    return bunker
+
+
+@router.delete("/{course_id}/holes/{hole_number}/bunkers/{bunker_id}", status_code=204)
+async def delete_bunker(
+    course_id: int,
+    hole_number: int,
+    bunker_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_superuser),
+):
+    hole = await _get_hole_or_404(course_id, hole_number, db)
+    bunker = next((b for b in hole.bunkers if b.id == bunker_id), None)
+    if not bunker:
+        raise HTTPException(404, "Bunker not found")
+    await db.delete(bunker)
 
 
 @router.delete("/{course_id}", status_code=204)

@@ -30,5 +30,26 @@ class CourseHoleTemplate(TimestampMixin, Base):
     stroke_index: Mapped[int | None] = mapped_column(Integer, default=None)
     tee_latitude: Mapped[float | None] = mapped_column(Float, default=None)
     tee_longitude: Mapped[float | None] = mapped_column(Float, default=None)
+    green_latitude: Mapped[float | None] = mapped_column(Float, default=None)
+    green_longitude: Mapped[float | None] = mapped_column(Float, default=None)
 
     course: Mapped["CourseTemplate"] = relationship(back_populates="holes")
+    bunkers: Mapped[list["CourseHoleBunker"]] = relationship(
+        back_populates="hole",
+        cascade="all, delete-orphan",
+        order_by="CourseHoleBunker.id",
+    )
+
+
+class CourseHoleBunker(TimestampMixin, Base):
+    __tablename__ = "course_hole_bunkers"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    hole_id: Mapped[int] = mapped_column(ForeignKey("course_hole_templates.id", ondelete="CASCADE"))
+    label: Mapped[str | None] = mapped_column(String(100), default=None)
+    front_latitude: Mapped[float | None] = mapped_column(Float, default=None)
+    front_longitude: Mapped[float | None] = mapped_column(Float, default=None)
+    back_latitude: Mapped[float | None] = mapped_column(Float, default=None)
+    back_longitude: Mapped[float | None] = mapped_column(Float, default=None)
+
+    hole: Mapped["CourseHoleTemplate"] = relationship(back_populates="bunkers")

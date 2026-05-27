@@ -220,6 +220,15 @@ export interface StrokeGainedHole {
   sg_putting: number;
 }
 
+export interface CourseHoleBunker {
+  id: number;
+  label: string | null;
+  front_latitude: number | null;
+  front_longitude: number | null;
+  back_latitude: number | null;
+  back_longitude: number | null;
+}
+
 export interface CourseHoleTemplate {
   id: number;
   hole_number: number;
@@ -228,6 +237,9 @@ export interface CourseHoleTemplate {
   stroke_index: number | null;
   tee_latitude: number | null;
   tee_longitude: number | null;
+  green_latitude: number | null;
+  green_longitude: number | null;
+  bunkers: CourseHoleBunker[];
 }
 
 export interface CourseTemplate {

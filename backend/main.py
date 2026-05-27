@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
-from sqlalchemy import text
+from sqlalchemy import select, text
 from config import get_settings
 from database import engine, Base
 from routers import auth, exercises, sessions, videos, coach, stats, connections, rounds, courses, admin
@@ -19,11 +19,31 @@ async def lifespan(app: FastAPI):
         for stmt in [
             "ALTER TABLE round_holes ADD COLUMN IF NOT EXISTS tee_latitude FLOAT",
             "ALTER TABLE round_holes ADD COLUMN IF NOT EXISTS tee_longitude FLOAT",
+            "ALTER TABLE course_hole_templates ADD COLUMN IF NOT EXISTS green_latitude FLOAT",
+            "ALTER TABLE course_hole_templates ADD COLUMN IF NOT EXISTS green_longitude FLOAT",
         ]:
             try:
                 await conn.execute(text(stmt))
             except Exception:
                 pass
+
+    # Promote SUPERUSER_EMAIL to superuser role if configured
+    if settings.superuser_email:
+        from models.user import User
+        async with engine.begin() as conn:
+            from sqlalchemy.ext.asyncio import AsyncSession
+            from sqlalchemy.orm import sessionmaker
+            AsyncSessionLocal = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+            async with AsyncSessionLocal() as db:
+                result = await db.execute(
+                    select(User).where(User.email == settings.superuser_email)
+                )
+                user = result.scalar_one_or_none()
+                if user and user.role != "superuser":
+                    user.role = "superuser"
+                    user.is_active = True
+                    await db.commit()
+
     yield
 
 

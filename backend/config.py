@@ -38,6 +38,9 @@ class Settings(BaseSettings):
     max_video_size_mb: int = 500
     max_image_size_mb: int = 10
 
+    # Bootstrap: promote this email to superuser on startup (remove after first use)
+    superuser_email: str = ""
+
 
 @lru_cache
 def get_settings() -> Settings:

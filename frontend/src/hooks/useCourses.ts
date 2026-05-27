@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { coursesApi, type CourseHoleUpdate } from "../api/courses";
+import { coursesApi, type CourseHoleUpdate, type BunkerCreate } from "../api/courses";
 
 export function useCourses() {
   return useQuery({ queryKey: ["courses"], queryFn: coursesApi.list });
@@ -35,6 +35,24 @@ export function useUpdateCourseHole(courseId: number) {
   return useMutation({
     mutationFn: ({ holeNumber, data }: { holeNumber: number; data: CourseHoleUpdate }) =>
       coursesApi.updateHole(courseId, holeNumber, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["courses", courseId] }),
+  });
+}
+
+export function useAddBunker(courseId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ holeNumber, data }: { holeNumber: number; data: BunkerCreate }) =>
+      coursesApi.addBunker(courseId, holeNumber, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["courses", courseId] }),
+  });
+}
+
+export function useDeleteBunker(courseId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ holeNumber, bunkerId }: { holeNumber: number; bunkerId: number }) =>
+      coursesApi.deleteBunker(courseId, holeNumber, bunkerId),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["courses", courseId] }),
   });
 }
