@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { MapContainer, TileLayer, Polyline, Marker, Circle, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import "leaflet-rotate";
 import {
   ChevronLeft,
   ChevronRight,
@@ -168,33 +169,19 @@ function MapUpdater({
     const tee = teePosRef.current;
     const green = greenPosRef.current;
 
+    // Rotate map so the hole direction (tee→green) points upward.
+    if (tee && green) {
+      const dlat = green[0] - tee[0];
+      const dlng = (green[1] - tee[1]) * Math.cos((tee[0] * Math.PI) / 180);
+      const bearingDeg = Math.atan2(dlng, dlat) * (180 / Math.PI);
+      (map as any).setBearing(bearingDeg);
+    } else {
+      (map as any).setBearing(0);
+    }
+
     if (bp.length >= 2) {
       const bounds = L.latLngBounds(bp.map((p) => L.latLng(p[0], p[1])));
-
-      let padTop = 40, padBottom = 40;
-      if (tee && green) {
-        const dlat = green[0] - tee[0];
-        const dlng = (green[1] - tee[1]) * Math.cos((tee[0] * Math.PI) / 180);
-        const nsFraction = Math.abs(dlat) / (Math.abs(dlat) + Math.abs(dlng) + 1e-9);
-        if (dlat > 0) {
-          padTop = Math.round(40 + 50 * nsFraction);
-          padBottom = Math.round(40 - 25 * nsFraction);
-        } else if (dlat < 0) {
-          padTop = Math.round(40 - 25 * nsFraction);
-          padBottom = Math.round(40 + 50 * nsFraction);
-        }
-        console.log("[MapUpdater] tee:", tee, "green:", green);
-        console.log("[MapUpdater] dlat:", dlat.toFixed(6), "dlng:", dlng.toFixed(6));
-        console.log("[MapUpdater] nsFraction:", nsFraction.toFixed(3), "→ padTop:", padTop, "padBottom:", padBottom);
-        console.log("[MapUpdater] map size:", map.getSize(), "bounds:", bounds.toBBoxString());
-      } else {
-        console.log("[MapUpdater] tee or green missing — tee:", tee, "green:", green, "using symmetric padding");
-      }
-
-      map.fitBounds(bounds, {
-        paddingTopLeft: [40, padTop],
-        paddingBottomRight: [40, padBottom],
-      });
+      map.fitBounds(bounds, { paddingTopLeft: [40, 60], paddingBottomRight: [40, 40] });
     } else if (hc) {
       map.setView(hc, Math.max(map.getZoom(), 18));
     }
@@ -582,6 +569,7 @@ export function ActiveRoundPage() {
           zoom={17}
           style={{ width: "100%", height: "100%" }}
           zoomControl={false}
+          {...({ rotate: true, touchRotate: false, bearing: 0 } as any)}
           attributionControl={false}
         >
           {satellite ? (
@@ -595,11 +583,6 @@ export function ActiveRoundPage() {
             teePos={holeTeaCenter}
             greenRefPos={greenMiddlePos ?? greenFrontPos ?? greenBackPos}
           />
-          {/* DEBUG — remove after orientation is confirmed */}
-          {typeof window !== "undefined" && (() => {
-            console.log("[ActiveRound] holeTeaCenter:", holeTeaCenter, "greenMiddlePos:", greenMiddlePos, "greenFrontPos:", greenFrontPos, "holeBoundsPoints:", holeBoundsPoints);
-            return null;
-          })()}
           <MapTapHandler enabled onTap={handleMapTap} />
 
           {/* Tee to green line */}
