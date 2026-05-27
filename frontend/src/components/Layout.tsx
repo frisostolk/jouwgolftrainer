@@ -1,11 +1,11 @@
 import { Outlet, NavLink } from "react-router-dom";
-import { Home, Dumbbell, Calendar, Video, BarChart2, Users, User } from "lucide-react";
+import { Home, Calendar, Video, BarChart2, Users, User, Flag } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { cn } from "../lib/utils";
 
 const navItems = [
   { to: "/", icon: Home, label: "Home" },
-  { to: "/exercises", icon: Dumbbell, label: "Exercises" },
+  { to: "/rounds", icon: Flag, label: "Rounds" },
   { to: "/sessions", icon: Calendar, label: "Sessions" },
   { to: "/videos", icon: Video, label: "Videos" },
   { to: "/stats", icon: BarChart2, label: "Stats" },

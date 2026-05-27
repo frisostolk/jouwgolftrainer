@@ -14,6 +14,9 @@ import { VideoDetailPage } from "./pages/VideoDetailPage";
 import { StatsPage } from "./pages/StatsPage";
 import { CoachPage } from "./pages/CoachPage";
 import { ProfilePage } from "./pages/ProfilePage";
+import { RoundsPage } from "./pages/RoundsPage";
+import { NewRoundPage } from "./pages/NewRoundPage";
+import { ActiveRoundPage } from "./pages/ActiveRoundPage";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
@@ -47,6 +50,9 @@ export default function App() {
             <Route path="stats" element={<StatsPage />} />
             <Route path="coach" element={<CoachPage />} />
             <Route path="profile" element={<ProfilePage />} />
+            <Route path="rounds" element={<RoundsPage />} />
+            <Route path="rounds/new" element={<NewRoundPage />} />
+            <Route path="rounds/:id" element={<ActiveRoundPage />} />
           </Route>
         </Routes>
       </BrowserRouter>
