@@ -27,7 +27,12 @@ class Settings(BaseSettings):
     spaces_cdn_endpoint: str = ""
 
     # CORS
-    allowed_origins: list[str] = ["http://localhost:5173", "http://localhost:3000"]
+    allowed_origins: list[str] = [
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "capacitor://localhost",   # Capacitor iOS app
+        "http://localhost",        # Capacitor iOS simulator
+    ]
 
     # File limits
     max_video_size_mb: int = 500
