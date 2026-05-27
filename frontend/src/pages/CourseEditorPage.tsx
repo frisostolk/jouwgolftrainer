@@ -1,13 +1,13 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Polyline, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { ChevronLeft, MapPin, CheckCircle2 } from "lucide-react";
-import { useCourse, useUpdateCourseHole } from "../hooks/useCourses";
-import type { CourseHoleTemplate } from "../types";
+import { ChevronLeft, Trash2, Plus, CheckCircle2 } from "lucide-react";
+import { useCourse, useUpdateCourseHole, useAddBunker, useDeleteBunker } from "../hooks/useCourses";
+import type { CourseHoleTemplate, CourseHoleBunker } from "../types";
 
-// ─── Leaflet helpers ──────────────────────────────────────────────────────────
+// ─── Map icons ────────────────────────────────────────────────────────────────
 
 function createTeeIcon() {
   return L.divIcon({
@@ -17,6 +17,35 @@ function createTeeIcon() {
     iconAnchor: [9, 9],
   });
 }
+
+function createGreenIcon() {
+  return L.divIcon({
+    html: `<div style="width:20px;height:20px;border-radius:50%;background:#16a34a;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center"><span style="color:white;font-size:9px;font-weight:900;line-height:1">⛳</span></div>`,
+    className: "",
+    iconSize: [20, 20],
+    iconAnchor: [10, 10],
+  });
+}
+
+function createBunkerIcon(label: string) {
+  return L.divIcon({
+    html: `<div style="width:22px;height:22px;border-radius:50%;background:#d97706;border:2px solid white;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;color:white;box-shadow:0 2px 6px rgba(0,0,0,0.35)">${label}</div>`,
+    className: "",
+    iconSize: [22, 22],
+    iconAnchor: [11, 11],
+  });
+}
+
+function createTempIcon(label: string) {
+  return L.divIcon({
+    html: `<div style="width:22px;height:22px;border-radius:50%;background:#f59e0b;border:2px dashed white;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;color:white;opacity:0.85">${label}</div>`,
+    className: "",
+    iconSize: [22, 22],
+    iconAnchor: [11, 11],
+  });
+}
+
+// ─── Map helpers ──────────────────────────────────────────────────────────────
 
 function MapCenterUpdater({ center }: { center: [number, number] | null }) {
   const map = useMap();
@@ -32,12 +61,12 @@ function MapCenterUpdater({ center }: { center: [number, number] | null }) {
   return null;
 }
 
-function MapTapHandler({ onTap }: { onTap: (lat: number, lng: number) => void }) {
-  useMapEvents({ click: (e) => onTap(e.latlng.lat, e.latlng.lng) });
+function MapTapHandler({ onTap, enabled }: { onTap: (lat: number, lng: number) => void; enabled: boolean }) {
+  useMapEvents({ click: (e) => { if (enabled) onTap(e.latlng.lat, e.latlng.lng); } });
   return null;
 }
 
-// ─── Meters / yards helpers ───────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function yardsToMeters(y: number | null): string {
   if (y === null) return "";
@@ -49,7 +78,12 @@ function metersToYards(m: string): number | null {
   return isNaN(n) ? null : Math.round(n / 0.9144);
 }
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type EditMode = "tee" | "green" | "bunkers";
+type BunkerPhase = null | "front" | "back";
+
+// ─── Main page ────────────────────────────────────────────────────────────────
 
 export function CourseEditorPage() {
   const { id } = useParams<{ id: string }>();
@@ -58,41 +92,80 @@ export function CourseEditorPage() {
 
   const { data: course, isLoading } = useCourse(courseId);
   const updateHole = useUpdateCourseHole(courseId);
+  const addBunker = useAddBunker(courseId);
+  const deleteBunker = useDeleteBunker(courseId);
 
   const [currentHole, setCurrentHole] = useState(1);
   const [satellite, setSatellite] = useState(true);
-  const [savedHole, setSavedHole] = useState<number | null>(null);
+  const [mode, setMode] = useState<EditMode>("tee");
+  const [savedFlash, setSavedFlash] = useState<string | null>(null);
 
-  // Local editable state for current hole
+  // Bunker add state
+  const [bunkerPhase, setBunkerPhase] = useState<BunkerPhase>(null);
+  const [bunkerFront, setBunkerFront] = useState<[number, number] | null>(null);
+
+  // Local hole form state
   const [localPar, setLocalPar] = useState(4);
   const [localDist, setLocalDist] = useState("");
 
   const hole: CourseHoleTemplate | undefined = course?.holes.find((h) => h.hole_number === currentHole);
 
-  // Sync local state when hole changes
   useEffect(() => {
     if (!hole) return;
     setLocalPar(hole.par);
     setLocalDist(yardsToMeters(hole.distance_yards));
+    // Reset bunker add state when switching holes
+    setBunkerPhase(null);
+    setBunkerFront(null);
   }, [currentHole, course?.id]);
 
-  const teeCenter: [number, number] | null =
-    hole?.tee_latitude != null && hole?.tee_longitude != null
-      ? [hole.tee_latitude, hole.tee_longitude]
-      : null;
+  const teePos: [number, number] | null =
+    hole?.tee_latitude != null ? [hole.tee_latitude, hole.tee_longitude!] : null;
+  const greenPos: [number, number] | null =
+    hole?.green_latitude != null ? [hole.green_latitude, hole.green_longitude!] : null;
+  const mapCenter: [number, number] = teePos ?? greenPos ?? [52.0, 4.3];
 
-  const mapCenter: [number, number] = teeCenter ?? [52.0, 4.3];
+  function flash(msg: string) {
+    setSavedFlash(msg);
+    setTimeout(() => setSavedFlash(null), 2000);
+  }
 
   function handleMapTap(lat: number, lng: number) {
-    updateHole.mutate(
-      { holeNumber: currentHole, data: { tee_latitude: lat, tee_longitude: lng } },
-      {
-        onSuccess: () => {
-          setSavedHole(currentHole);
-          setTimeout(() => setSavedHole(null), 2000);
-        },
+    if (mode === "tee") {
+      updateHole.mutate(
+        { holeNumber: currentHole, data: { tee_latitude: lat, tee_longitude: lng } },
+        { onSuccess: () => flash("Tee saved") }
+      );
+    } else if (mode === "green") {
+      updateHole.mutate(
+        { holeNumber: currentHole, data: { green_latitude: lat, green_longitude: lng } },
+        { onSuccess: () => flash("Green saved") }
+      );
+    } else if (mode === "bunkers") {
+      if (bunkerPhase === "front") {
+        setBunkerFront([lat, lng]);
+        setBunkerPhase("back");
+      } else if (bunkerPhase === "back" && bunkerFront) {
+        addBunker.mutate(
+          {
+            holeNumber: currentHole,
+            data: {
+              front_latitude: bunkerFront[0],
+              front_longitude: bunkerFront[1],
+              back_latitude: lat,
+              back_longitude: lng,
+            },
+          },
+          {
+            onSuccess: () => {
+              setBunkerPhase(null);
+              setBunkerFront(null);
+              flash("Bunker added");
+            },
+          }
+        );
       }
-    );
+    }
   }
 
   function handleParChange(par: 3 | 4 | 5) {
@@ -101,9 +174,27 @@ export function CourseEditorPage() {
   }
 
   function handleDistBlur() {
-    const yards = metersToYards(localDist);
-    updateHole.mutate({ holeNumber: currentHole, data: { distance_yards: yards } });
+    updateHole.mutate({ holeNumber: currentHole, data: { distance_yards: metersToYards(localDist) } });
   }
+
+  function startBunkerAdd() {
+    setBunkerPhase("front");
+    setBunkerFront(null);
+  }
+
+  function cancelBunkerAdd() {
+    setBunkerPhase(null);
+    setBunkerFront(null);
+  }
+
+  const tapEnabled = mode === "tee" || mode === "green" || (mode === "bunkers" && bunkerPhase !== null);
+
+  const bannerText =
+    mode === "tee" ? `Tap map to set tee — Hole ${currentHole}` :
+    mode === "green" ? `Tap map to set green — Hole ${currentHole}` :
+    bunkerPhase === "front" ? "Tap the front edge of the bunker (closest to tee)" :
+    bunkerPhase === "back" ? "Tap the back edge of the bunker (furthest from tee)" :
+    null;
 
   if (isLoading || !course) {
     return (
@@ -122,7 +213,7 @@ export function CourseEditorPage() {
         </button>
         <div className="text-center">
           <p className="text-sm font-semibold leading-none">{course.name}</p>
-          <p className="text-xs text-gray-400 mt-0.5">{course.total_holes} holes · Course Editor</p>
+          <p className="text-xs text-gray-400 mt-0.5">{course.total_holes} holes</p>
         </div>
         <button
           onClick={() => setSatellite((s) => !s)}
@@ -132,26 +223,25 @@ export function CourseEditorPage() {
         </button>
       </div>
 
-      {/* Hole selector */}
+      {/* Hole tabs */}
       <div className="bg-gray-800 overflow-x-auto flex-shrink-0">
         <div className="flex px-3 py-2 gap-1 min-w-max">
           {course.holes.map((h) => {
-            const hasPos = h.tee_latitude != null;
+            const hasTee = h.tee_latitude != null;
+            const hasGreen = h.green_latitude != null;
+            const hasBunkers = h.bunkers.length > 0;
+            const dots = [hasTee && "🟢", hasGreen && "⛳", hasBunkers && "🟡"].filter(Boolean);
             return (
               <button
                 key={h.hole_number}
                 onClick={() => setCurrentHole(h.hole_number)}
                 className={`flex flex-col items-center w-9 py-1 rounded-lg text-xs font-semibold transition-colors flex-shrink-0 ${
-                  h.hole_number === currentHole
-                    ? "bg-green-600 text-white"
-                    : hasPos
-                    ? "bg-gray-600 text-gray-200"
-                    : "bg-gray-700 text-gray-500"
+                  h.hole_number === currentHole ? "bg-green-600 text-white" : "bg-gray-700 text-gray-400"
                 }`}
               >
                 <span>{h.hole_number}</span>
-                {hasPos && (
-                  <span className="text-[7px] leading-none text-green-400">●</span>
+                {dots.length > 0 && (
+                  <span className="text-[7px] leading-none">{dots.join("")}</span>
                 )}
               </button>
             );
@@ -160,8 +250,7 @@ export function CourseEditorPage() {
       </div>
 
       {/* Hole settings bar */}
-      <div className="bg-gray-800 border-t border-gray-700 px-4 py-2.5 flex items-center gap-4 flex-shrink-0">
-        {/* Par */}
+      <div className="bg-gray-800 border-t border-gray-700 px-4 py-2 flex items-center gap-3 flex-shrink-0">
         <div className="flex items-center gap-1.5">
           <span className="text-xs text-gray-400 font-medium">Par</span>
           {([3, 4, 5] as const).map((p) => (
@@ -176,9 +265,7 @@ export function CourseEditorPage() {
             </button>
           ))}
         </div>
-
-        {/* Distance */}
-        <div className="flex items-center gap-1.5 flex-1">
+        <div className="flex items-center gap-1.5">
           <span className="text-xs text-gray-400 font-medium">Dist</span>
           <input
             type="number"
@@ -191,30 +278,40 @@ export function CourseEditorPage() {
           />
           <span className="text-xs text-gray-500">m</span>
         </div>
+        {savedFlash && (
+          <span className="flex items-center gap-1 text-xs text-green-400 font-medium ml-auto">
+            <CheckCircle2 className="w-3.5 h-3.5" /> {savedFlash}
+          </span>
+        )}
+      </div>
 
-        {/* Tee status */}
-        <div className="flex items-center gap-1">
-          {savedHole === currentHole ? (
-            <span className="flex items-center gap-1 text-xs text-green-400 font-medium">
-              <CheckCircle2 className="w-3.5 h-3.5" /> Saved
-            </span>
-          ) : teeCenter ? (
-            <span className="flex items-center gap-1 text-xs text-green-500">
-              <MapPin className="w-3 h-3" /> Tee set
-            </span>
-          ) : (
-            <span className="text-xs text-gray-500 flex items-center gap-1">
-              <MapPin className="w-3 h-3" /> No tee
-            </span>
-          )}
-        </div>
+      {/* Mode tabs */}
+      <div className="bg-gray-800 border-t border-gray-700 flex flex-shrink-0">
+        {(["tee", "green", "bunkers"] as EditMode[]).map((m) => {
+          const label = m === "tee" ? "Tee" : m === "green" ? "Green" : "Bunkers";
+          const count = m === "bunkers" ? hole?.bunkers.length : null;
+          return (
+            <button
+              key={m}
+              onClick={() => { setMode(m); cancelBunkerAdd(); }}
+              className={`flex-1 py-2 text-xs font-semibold transition-colors border-b-2 ${
+                mode === m ? "text-white border-green-500" : "text-gray-400 border-transparent"
+              }`}
+            >
+              {label}
+              {count != null && count > 0 && (
+                <span className="ml-1 bg-amber-500 text-white text-[9px] rounded-full px-1">{count}</span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {/* Map */}
-      <div className="relative flex-shrink-0" style={{ height: "55vh" }}>
+      <div className="relative flex-shrink-0" style={{ height: "45vh" }}>
         <MapContainer
           center={mapCenter}
-          zoom={16}
+          zoom={17}
           style={{ width: "100%", height: "100%" }}
           zoomControl={false}
           attributionControl={false}
@@ -224,51 +321,203 @@ export function CourseEditorPage() {
           ) : (
             <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
           )}
-          <MapCenterUpdater center={teeCenter} />
-          <MapTapHandler onTap={handleMapTap} />
+          <MapCenterUpdater center={teePos ?? greenPos} />
+          <MapTapHandler onTap={handleMapTap} enabled={tapEnabled} />
 
-          {teeCenter && (
-            <Marker position={teeCenter} icon={createTeeIcon()} />
+          {/* Tee-to-green line */}
+          {teePos && greenPos && (
+            <Polyline
+              positions={[teePos, greenPos]}
+              pathOptions={{ color: "#ffffff", weight: 2, opacity: 0.4, dashArray: "6 4" }}
+            />
           )}
+
+          {/* Tee marker */}
+          {teePos && <Marker position={teePos} icon={createTeeIcon()} />}
+
+          {/* Green marker */}
+          {greenPos && <Marker position={greenPos} icon={createGreenIcon()} />}
+
+          {/* Bunker markers */}
+          {hole?.bunkers.map((b, i) => (
+            <BunkerMarkers key={b.id} bunker={b} index={i + 1} />
+          ))}
+
+          {/* Temporary bunker-front marker while placing back */}
+          {bunkerFront && <Marker position={bunkerFront} icon={createTempIcon("F")} />}
         </MapContainer>
 
-        {/* Instruction banner */}
-        <div className="absolute bottom-0 inset-x-0 z-[1000] bg-black/60 text-white text-xs text-center py-2 px-4">
-          Tap anywhere on the map to set the tee position for Hole {currentHole}
-          {updateHole.isPending && <span className="ml-2 opacity-70">Saving…</span>}
-        </div>
+        {/* Banner */}
+        {bannerText && (
+          <div className="absolute bottom-0 inset-x-0 z-[1000] bg-black/70 text-white text-xs text-center py-2 px-4 flex items-center justify-between">
+            <span>{bannerText}</span>
+            {bunkerPhase && (
+              <button onClick={cancelBunkerAdd} className="text-xs text-gray-300 underline ml-3">Cancel</button>
+            )}
+          </div>
+        )}
+        {!bannerText && (
+          <div className="absolute bottom-0 inset-x-0 z-[1000] bg-black/50 text-gray-300 text-xs text-center py-1.5 px-4">
+            {mode === "bunkers" ? "Use \"Add Bunker\" below, or switch tab to edit tee / green" : `Tap map to set ${mode} for Hole ${currentHole}`}
+          </div>
+        )}
       </div>
 
-      {/* Bottom info */}
+      {/* Bottom panel */}
       <div className="flex-1 overflow-y-auto bg-white">
-        <div className="px-4 py-4">
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">All Holes</p>
-          <div className="grid grid-cols-3 gap-2">
-            {course.holes.map((h) => (
-              <button
-                key={h.hole_number}
-                onClick={() => setCurrentHole(h.hole_number)}
-                className={`flex flex-col items-start p-2.5 rounded-xl border text-left transition-colors ${
-                  h.hole_number === currentHole
-                    ? "border-green-500 bg-green-50"
-                    : "border-gray-100 bg-gray-50"
-                }`}
-              >
-                <div className="flex items-center justify-between w-full">
-                  <span className="text-xs font-bold text-gray-700">Hole {h.hole_number}</span>
-                  {h.tee_latitude != null ? (
-                    <span className="w-2 h-2 rounded-full bg-green-500" />
-                  ) : (
-                    <span className="w-2 h-2 rounded-full bg-gray-200" />
-                  )}
-                </div>
-                <span className="text-[10px] text-gray-400 mt-0.5">
-                  Par {h.par}{h.distance_yards ? ` · ${Math.round(h.distance_yards * 0.9144)}m` : ""}
-                </span>
-              </button>
-            ))}
-          </div>
+        {mode === "bunkers" ? (
+          <BunkersPanel
+            hole={hole}
+            courseId={courseId}
+            onAdd={startBunkerAdd}
+            isAdding={bunkerPhase !== null}
+            deleteBunkerMutate={(bunkerId) =>
+              deleteBunker.mutate({ holeNumber: currentHole, bunkerId })
+            }
+          />
+        ) : (
+          <HoleOverview course={course} currentHole={currentHole} onSelectHole={setCurrentHole} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Bunker markers (front + back + line) ────────────────────────────────────
+
+function BunkerMarkers({ bunker, index }: { bunker: CourseHoleBunker; index: number }) {
+  const frontPos: [number, number] | null =
+    bunker.front_latitude != null ? [bunker.front_latitude, bunker.front_longitude!] : null;
+  const backPos: [number, number] | null =
+    bunker.back_latitude != null ? [bunker.back_latitude, bunker.back_longitude!] : null;
+
+  return (
+    <>
+      {frontPos && <Marker position={frontPos} icon={createBunkerIcon(`${index}F`)} />}
+      {backPos && <Marker position={backPos} icon={createBunkerIcon(`${index}B`)} />}
+      {frontPos && backPos && (
+        <Polyline
+          positions={[frontPos, backPos]}
+          pathOptions={{ color: "#d97706", weight: 2, opacity: 0.8, dashArray: "4 3" }}
+        />
+      )}
+    </>
+  );
+}
+
+// ─── Bunkers panel ────────────────────────────────────────────────────────────
+
+function BunkersPanel({
+  hole,
+  courseId: _courseId,
+  onAdd,
+  isAdding,
+  deleteBunkerMutate,
+}: {
+  hole: CourseHoleTemplate | undefined;
+  courseId: number;
+  onAdd: () => void;
+  isAdding: boolean;
+  deleteBunkerMutate: (bunkerId: number) => void;
+}) {
+  const bunkers = hole?.bunkers ?? [];
+
+  return (
+    <div className="px-4 py-4">
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-sm font-semibold text-gray-700">
+          Bunkers — Hole {hole?.hole_number}
+          <span className="ml-2 text-xs font-normal text-gray-400">{bunkers.length} saved</span>
+        </p>
+        {!isAdding && (
+          <button
+            onClick={onAdd}
+            className="flex items-center gap-1 px-3 py-1.5 bg-amber-500 text-white rounded-lg text-xs font-semibold"
+          >
+            <Plus className="w-3.5 h-3.5" /> Add Bunker
+          </button>
+        )}
+        {isAdding && (
+          <span className="text-xs text-amber-600 font-semibold animate-pulse">Tap on map…</span>
+        )}
+      </div>
+
+      {bunkers.length === 0 ? (
+        <div className="text-center py-8 text-sm text-gray-400">
+          No bunkers mapped yet. Tap "Add Bunker" then tap the front and back edges on the map.
         </div>
+      ) : (
+        <div className="space-y-2">
+          {bunkers.map((b, i) => (
+            <div key={b.id} className="flex items-center justify-between bg-gray-50 rounded-xl px-3 py-2.5 border border-gray-100">
+              <div className="flex items-center gap-3">
+                <div className="w-7 h-7 rounded-full bg-amber-400 flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
+                  {i + 1}
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-700">{b.label ?? `Bunker ${i + 1}`}</p>
+                  <p className="text-xs text-gray-400">
+                    {b.front_latitude != null ? `F: ${b.front_latitude.toFixed(5)}, ${b.front_longitude!.toFixed(5)}` : "Front not set"}
+                    {" · "}
+                    {b.back_latitude != null ? `B: ${b.back_latitude.toFixed(5)}, ${b.back_longitude!.toFixed(5)}` : "Back not set"}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => deleteBunkerMutate(b.id)}
+                className="p-1.5 text-gray-300 hover:text-red-400 transition-colors"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Hole overview grid (shown when mode = tee or green) ─────────────────────
+
+function HoleOverview({
+  course,
+  currentHole,
+  onSelectHole,
+}: {
+  course: import("../types").CourseTemplate;
+  currentHole: number;
+  onSelectHole: (n: number) => void;
+}) {
+  return (
+    <div className="px-4 py-4">
+      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">All Holes</p>
+      <div className="grid grid-cols-3 gap-2">
+        {course.holes.map((h) => (
+          <button
+            key={h.hole_number}
+            onClick={() => onSelectHole(h.hole_number)}
+            className={`flex flex-col items-start p-2.5 rounded-xl border text-left transition-colors ${
+              h.hole_number === currentHole ? "border-green-500 bg-green-50" : "border-gray-100 bg-gray-50"
+            }`}
+          >
+            <div className="flex items-center justify-between w-full">
+              <span className="text-xs font-bold text-gray-700">Hole {h.hole_number}</span>
+              <div className="flex gap-0.5">
+                <span className={`w-2 h-2 rounded-full ${h.tee_latitude != null ? "bg-green-500" : "bg-gray-200"}`} title="Tee" />
+                <span className={`w-2 h-2 rounded-full ${h.green_latitude != null ? "bg-green-600" : "bg-gray-200"}`} title="Green" />
+                <span className={`w-2 h-2 rounded-full ${h.bunkers.length > 0 ? "bg-amber-400" : "bg-gray-200"}`} title="Bunkers" />
+              </div>
+            </div>
+            <span className="text-[10px] text-gray-400 mt-0.5">
+              Par {h.par}{h.distance_yards ? ` · ${Math.round(h.distance_yards * 0.9144)}m` : ""}
+            </span>
+          </button>
+        ))}
+      </div>
+      <div className="flex items-center gap-4 mt-4 text-[10px] text-gray-400">
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" /> Tee</span>
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-600 inline-block" /> Green</span>
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400 inline-block" /> Bunkers</span>
       </div>
     </div>
   );
