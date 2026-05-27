@@ -244,6 +244,7 @@ export function ActiveRoundPage() {
   // tapMode: null = normal, "fakeGps" = tap to set fake GPS, "setTee" = admin tap to set tee
   const [tapMode, setTapMode] = useState<null | "fakeGps" | "setTee">(null);
   const [fakeGpsPos, setFakeGpsPos] = useState<[number, number] | null>(null);
+  const [selectedBunkerId, setSelectedBunkerId] = useState<number | null>(null);
   const [isGettingGps, setIsGettingGps] = useState(false);
   const [shotError, setShotError] = useState<string | null>(null);
   const [showScorecard, setShowScorecard] = useState(false);
@@ -318,6 +319,7 @@ export function ActiveRoundPage() {
 
   // Hazards from the course template for the current hole
   const holeHazards = courseTemplate?.holes.find((h) => h.hole_number === currentHole)?.hazards ?? [];
+  const holeBunkers = courseTemplate?.holes.find((h) => h.hole_number === currentHole)?.bunkers ?? [];
 
   // All hole points for fitBounds (tee + all green positions)
   const holeBoundsPoints: [number, number][] = [
@@ -327,6 +329,8 @@ export function ActiveRoundPage() {
   // effective GPS: fake (test mode) > real
   const effectiveGps = fakeGpsPos ?? gpsPos;
   const mapCenter: [number, number] = holeTeaCenter ?? effectiveGps ?? [52.0, 4.3];
+  const selectedBunker = holeBunkers.find((b) => b.id === selectedBunkerId) ?? null;
+  const carryRefPos: [number, number] | null = effectiveGps ?? holeTeaCenter ?? null;
 
   function handleMapTap(lat: number, lng: number) {
     if (tapMode === "fakeGps") {
@@ -334,6 +338,8 @@ export function ActiveRoundPage() {
     } else if (tapMode === "setTee" && isAdmin) {
       updateHole.mutate({ holeNumber: currentHole, data: { tee_latitude: lat, tee_longitude: lng } });
       setTapMode(null);
+    } else {
+      setSelectedBunkerId(null);
     }
   }
 
@@ -594,7 +600,7 @@ export function ActiveRoundPage() {
             console.log("[ActiveRound] holeTeaCenter:", holeTeaCenter, "greenMiddlePos:", greenMiddlePos, "greenFrontPos:", greenFrontPos, "holeBoundsPoints:", holeBoundsPoints);
             return null;
           })()}
-          <MapTapHandler enabled={tapMode !== null} onTap={handleMapTap} />
+          <MapTapHandler enabled onTap={handleMapTap} />
 
           {/* Tee to green line */}
           {holeTeaCenter && (greenMiddlePos ?? greenFrontPos ?? greenBackPos) && (
@@ -614,6 +620,20 @@ export function ActiveRoundPage() {
                 center={[h.latitude, h.longitude]}
                 radius={h.radius_meters}
                 pathOptions={{ color, fillColor: color, fillOpacity: 0.2, weight: 1.5 }}
+              />
+            );
+          })}
+
+          {/* Bunker carry lines */}
+          {holeBunkers.map((b) => {
+            if (b.front_latitude == null || b.front_longitude == null || b.back_latitude == null || b.back_longitude == null) return null;
+            const isSelected = b.id === selectedBunkerId;
+            return (
+              <Polyline
+                key={b.id}
+                positions={[[b.front_latitude, b.front_longitude], [b.back_latitude, b.back_longitude]]}
+                pathOptions={{ color: "#f59e0b", weight: isSelected ? 8 : 5, opacity: isSelected ? 1 : 0.75 }}
+                eventHandlers={{ click: (e) => { e.originalEvent.stopPropagation(); setSelectedBunkerId(isSelected ? null : b.id); } }}
               />
             );
           })}
@@ -657,6 +677,21 @@ export function ActiveRoundPage() {
             <Marker position={fakeGpsPos} icon={createFakeGpsIcon()} />
           )}
         </MapContainer>
+
+        {/* Bunker carry popup */}
+        {selectedBunker && carryRefPos && selectedBunker.front_latitude != null && selectedBunker.back_latitude != null && (
+          <div className="absolute top-2 left-1/2 -translate-x-1/2 z-[1000] bg-gray-900/90 text-white rounded-xl px-4 py-2.5 flex flex-col items-center gap-1 shadow-xl pointer-events-none">
+            <div className="text-xs text-amber-400 font-semibold uppercase tracking-wide">{selectedBunker.label ?? "Bunker"}</div>
+            <div className="flex gap-4 text-sm font-bold">
+              <span className="text-amber-300">
+                Front &nbsp;{Math.round(haversineMeters(carryRefPos[0], carryRefPos[1], selectedBunker.front_latitude!, selectedBunker.front_longitude!))}m
+              </span>
+              <span className="text-white">
+                Back &nbsp;{Math.round(haversineMeters(carryRefPos[0], carryRefPos[1], selectedBunker.back_latitude!, selectedBunker.back_longitude!))}m
+              </span>
+            </div>
+          </div>
+        )}
 
         {/* Map controls */}
         <div className="absolute bottom-3 right-3 z-[1000] flex flex-col gap-2">
