@@ -133,17 +133,24 @@ function haversineMeters(lat1: number, lon1: number, lat2: number, lon2: number)
 function MapUpdater({
   holeCenter,
   holeBoundsPoints,
+  teePos,
+  greenRefPos,
 }: {
   holeCenter: [number, number] | null;
   holeBoundsPoints: [number, number][];
+  teePos: [number, number] | null;
+  greenRefPos: [number, number] | null;
 }) {
   const map = useMap();
   const prevKeyRef = useRef<string | null>(null);
-  // Keep refs so the effect always reads latest values
   const holeCenterRef = useRef(holeCenter);
   const holeBoundsRef = useRef(holeBoundsPoints);
+  const teePosRef = useRef(teePos);
+  const greenPosRef = useRef(greenRefPos);
   holeCenterRef.current = holeCenter;
   holeBoundsRef.current = holeBoundsPoints;
+  teePosRef.current = teePos;
+  greenPosRef.current = greenRefPos;
 
   const key =
     holeBoundsPoints.length >= 2
@@ -158,10 +165,36 @@ function MapUpdater({
 
     const bp = holeBoundsRef.current;
     const hc = holeCenterRef.current;
+    const tee = teePosRef.current;
+    const green = greenPosRef.current;
 
     if (bp.length >= 2) {
       const bounds = L.latLngBounds(bp.map((p) => L.latLng(p[0], p[1])));
-      map.fitBounds(bounds, { padding: [40, 40] });
+
+      // Orientation-aware padding: push tee toward the viewport bottom.
+      // In Mercator, north = screen top.  For a north-going hole (green north of tee)
+      // adding more top-pad and less bottom-pad shifts the usable area downward so
+      // the tee (southern point) lands near the bottom edge of the viewport.
+      let padTop = 40, padBottom = 40;
+      if (tee && green) {
+        const dlat = green[0] - tee[0]; // positive = green is north of tee
+        const dlng = (green[1] - tee[1]) * Math.cos((tee[0] * Math.PI) / 180);
+        const nsFraction = Math.abs(dlat) / (Math.abs(dlat) + Math.abs(dlng) + 1e-9);
+        if (dlat > 0) {
+          // Green is north: apply asymmetric padding weighted by north-south fraction
+          padTop = Math.round(40 + 50 * nsFraction);   // up to 90
+          padBottom = Math.round(40 - 25 * nsFraction); // down to 15
+        } else if (dlat < 0) {
+          // Green is south: mirror — add padding at bottom so green ends up near viewport bottom
+          padTop = Math.round(40 - 25 * nsFraction);
+          padBottom = Math.round(40 + 50 * nsFraction);
+        }
+      }
+
+      map.fitBounds(bounds, {
+        paddingTopLeft: [40, padTop],
+        paddingBottomRight: [40, padBottom],
+      });
     } else if (hc) {
       map.setView(hc, Math.max(map.getZoom(), 18));
     }
@@ -550,7 +583,12 @@ export function ActiveRoundPage() {
           ) : (
             <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
           )}
-          <MapUpdater holeCenter={holeTeaCenter} holeBoundsPoints={holeBoundsPoints} />
+          <MapUpdater
+            holeCenter={holeTeaCenter}
+            holeBoundsPoints={holeBoundsPoints}
+            teePos={holeTeaCenter}
+            greenRefPos={greenMiddlePos ?? greenFrontPos ?? greenBackPos}
+          />
           <MapTapHandler enabled={tapMode !== null} onTap={handleMapTap} />
 
           {/* Tee to green line */}

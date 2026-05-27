@@ -72,12 +72,47 @@ function createSmallDotIcon(color: string) {
 }
 
 function computeCircle(points: [number, number][]): { center: [number, number]; radius: number } | null {
-  if (points.length < 2) return null;
-  const lat = points.reduce((s, p) => s + p[0], 0) / points.length;
-  const lng = points.reduce((s, p) => s + p[1], 0) / points.length;
-  const center: [number, number] = [lat, lng];
-  const radius = Math.max(...points.map((p) => haversineMeters(center[0], center[1], p[0], p[1])));
-  return { center, radius };
+  const n = points.length;
+  if (n < 3) return null;
+
+  // Work in local meters (flat-Earth OK for small areas like a golf hole)
+  const lat0 = points.reduce((s, p) => s + p[0], 0) / n;
+  const lng0 = points.reduce((s, p) => s + p[1], 0) / n;
+  const mPerLat = 111319.9;
+  const mPerLng = 111319.9 * Math.cos((lat0 * Math.PI) / 180);
+
+  const xs = points.map((p) => (p[1] - lng0) * mPerLng);
+  const ys = points.map((p) => (p[0] - lat0) * mPerLat);
+
+  // Kasa algebraic least-squares circle fit
+  const mx = xs.reduce((s, x) => s + x, 0) / n;
+  const my = ys.reduce((s, y) => s + y, 0) / n;
+  const u = xs.map((x) => x - mx);
+  const v = ys.map((y) => y - my);
+
+  const Suu = u.reduce((s, x) => s + x * x, 0);
+  const Svv = v.reduce((s, y) => s + y * y, 0);
+  const Suv = u.reduce((s, x, i) => s + x * v[i], 0);
+  const Suuu = u.reduce((s, x) => s + x * x * x, 0);
+  const Svvv = v.reduce((s, y) => s + y * y * y, 0);
+  const Suvv = u.reduce((s, x, i) => s + x * v[i] * v[i], 0);
+  const Suuv = u.reduce((s, x, i) => s + x * x * v[i], 0);
+
+  const b1 = (Suuu + Suvv) / 2;
+  const b2 = (Suuv + Svvv) / 2;
+  const det = Suu * Svv - Suv * Suv;
+
+  let uc = 0, vc = 0;
+  if (Math.abs(det) > 1e-6) {
+    uc = (b1 * Svv - b2 * Suv) / det;
+    vc = (Suu * b2 - Suv * b1) / det;
+  }
+
+  const radius = Math.sqrt(u.reduce((s, x, i) => s + (x - uc) ** 2 + (v[i] - vc) ** 2, 0) / n);
+  const centerLat = lat0 + (vc + my) / mPerLat;
+  const centerLng = lng0 + (uc + mx) / mPerLng;
+
+  return { center: [centerLat, centerLng], radius };
 }
 
 function createTempIcon(label: string) {
@@ -89,31 +124,67 @@ function createTempIcon(label: string) {
   });
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function haversineMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6371000;
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
 // ─── Map helpers ──────────────────────────────────────────────────────────────
 
-function MapCenterUpdater({ center }: { center: [number, number] | null }) {
+function MapCenterUpdater({
+  boundsPoints,
+  teePos,
+  greenRefPos,
+  fallback,
+}: {
+  boundsPoints: [number, number][];
+  teePos: [number, number] | null;
+  greenRefPos: [number, number] | null;
+  fallback: [number, number] | null;
+}) {
   const map = useMap();
-  const prev = useRef<string | null>(null);
+  const prevKeyRef = useRef<string | null>(null);
+  const bpRef = useRef(boundsPoints);
+  const teeRef = useRef(teePos);
+  const greenRef = useRef(greenRefPos);
+  const fallbackRef = useRef(fallback);
+  bpRef.current = boundsPoints;
+  teeRef.current = teePos;
+  greenRef.current = greenRefPos;
+  fallbackRef.current = fallback;
+
+  const key =
+    boundsPoints.length >= 2
+      ? boundsPoints.map((p) => `${p[0].toFixed(5)},${p[1].toFixed(5)}`).join("|")
+      : fallback
+      ? `${fallback[0].toFixed(5)},${fallback[1].toFixed(5)}`
+      : null;
+
   useEffect(() => {
-    if (!center) return;
-    const key = center.join(",");
-    if (key !== prev.current) {
-      prev.current = key;
-      map.setView(center, Math.max(map.getZoom(), 17));
+    if (!key || key === prevKeyRef.current) return;
+    prevKeyRef.current = key;
+
+    const bp = bpRef.current;
+    const tee = teeRef.current;
+    const green = greenRef.current;
+    const fb = fallbackRef.current;
+
+    if (bp.length >= 2) {
+      const bounds = L.latLngBounds(bp.map((p) => L.latLng(p[0], p[1])));
+      let padTop = 40, padBottom = 40;
+      if (tee && green) {
+        const dlat = green[0] - tee[0];
+        const dlng = (green[1] - tee[1]) * Math.cos((tee[0] * Math.PI) / 180);
+        const nsFraction = Math.abs(dlat) / (Math.abs(dlat) + Math.abs(dlng) + 1e-9);
+        if (dlat > 0) {
+          padTop = Math.round(40 + 50 * nsFraction);
+          padBottom = Math.round(40 - 25 * nsFraction);
+        } else if (dlat < 0) {
+          padTop = Math.round(40 - 25 * nsFraction);
+          padBottom = Math.round(40 + 50 * nsFraction);
+        }
+      }
+      map.fitBounds(bounds, { paddingTopLeft: [40, padTop], paddingBottomRight: [40, padBottom] });
+    } else if (fb) {
+      map.setView(fb, Math.max(map.getZoom(), 17));
     }
-  }, [center, map]);
+  }, [key, map]);
+
   return null;
 }
 
@@ -278,8 +349,9 @@ export function CourseEditorPage() {
   const bannerText =
     mode === "tee" ? `Tap map — tee for Hole ${currentHole}` :
     mode === "green" ? `Tap map — green ${greenSub} for Hole ${currentHole}` :
-    mode === "hazards" && hazardPoints.length === 0 ? `Tap boundary of ${selectedHazardType.replace("_", " ")} hazard` :
-    mode === "hazards" ? `${hazardPoints.length} points — tap more or save below` :
+    mode === "hazards" && hazardPoints.length === 0 ? `Tap the edge of the ${selectedHazardType.replace("_", " ")} (4+ points)` :
+    mode === "hazards" && hazardPoints.length < 3 ? `${hazardPoints.length}/3 — keep tapping the edge` :
+    mode === "hazards" ? `${hazardPoints.length} pts · r≈${liveCircle ? Math.round(liveCircle.radius) + "m" : "…"} — save or tap more` :
     bunkerPhase === "front" ? "Tap the front edge of the bunker (closest to tee)" :
     bunkerPhase === "back" ? "Tap the back edge of the bunker (furthest from tee)" :
     "Tap \"Add Bunker\" below, then tap front and back edges on the map";
@@ -455,7 +527,12 @@ export function CourseEditorPage() {
           ) : (
             <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
           )}
-          <MapCenterUpdater center={teePos ?? greenFront ?? greenMiddle} />
+          <MapCenterUpdater
+            boundsPoints={[teePos, greenFront, greenMiddle, greenBack].filter((p): p is [number, number] => p !== null)}
+            teePos={teePos}
+            greenRefPos={greenMiddle ?? greenFront}
+            fallback={teePos ?? greenFront ?? greenMiddle ?? greenBack}
+          />
           <MapTapHandler onTap={handleMapTap} enabled={tapEnabled} />
 
           {/* Tee → green reference line */}
@@ -527,12 +604,20 @@ export function CourseEditorPage() {
         </MapContainer>
 
         {/* Banner */}
-        <div className="absolute bottom-0 inset-x-0 z-[1000] bg-black/60 text-white text-xs text-center py-1.5 px-4 flex items-center justify-between">
-          <span>{bannerText}</span>
+        <div className="absolute bottom-0 inset-x-0 z-[1000] bg-black/60 text-white text-xs py-1.5 px-3 flex items-center justify-between gap-2">
+          <span className="flex-1">{bannerText}</span>
+          {hazardPoints.length > 0 && (
+            <button
+              onClick={() => setHazardPoints((prev) => prev.slice(0, -1))}
+              className="text-xs text-yellow-300 underline flex-shrink-0"
+            >
+              Undo
+            </button>
+          )}
           {(bunkerPhase || hazardPoints.length > 0) && (
             <button
               onClick={() => { setBunkerPhase(null); setBunkerFront(null); setHazardPoints([]); }}
-              className="text-xs text-gray-300 underline ml-3 flex-shrink-0"
+              className="text-xs text-gray-300 underline flex-shrink-0"
             >
               Clear
             </button>
@@ -688,7 +773,7 @@ function HazardsPanel({
           <div className="flex gap-2">
             <button
               onClick={onSave}
-              disabled={hazardPoints.length < 2}
+              disabled={hazardPoints.length < 3}
               className="flex-1 py-2 bg-blue-600 text-white rounded-lg text-xs font-semibold disabled:opacity-40"
             >
               Save Circle
