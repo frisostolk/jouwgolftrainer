@@ -39,6 +39,12 @@ class RoundHole(TimestampMixin, Base):
     pin_longitude: Mapped[float | None] = mapped_column(Float, default=None)
     tee_latitude: Mapped[float | None] = mapped_column(Float, default=None)
     tee_longitude: Mapped[float | None] = mapped_column(Float, default=None)
+    green_front_latitude: Mapped[float | None] = mapped_column(Float, default=None)
+    green_front_longitude: Mapped[float | None] = mapped_column(Float, default=None)
+    green_middle_latitude: Mapped[float | None] = mapped_column(Float, default=None)
+    green_middle_longitude: Mapped[float | None] = mapped_column(Float, default=None)
+    green_back_latitude: Mapped[float | None] = mapped_column(Float, default=None)
+    green_back_longitude: Mapped[float | None] = mapped_column(Float, default=None)
 
     round: Mapped["Round"] = relationship(back_populates="holes")
     shots: Mapped[list["Shot"]] = relationship(

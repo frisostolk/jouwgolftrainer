@@ -3,6 +3,25 @@ from datetime import datetime
 from typing import Optional
 
 
+class CourseHoleHazardCreate(BaseModel):
+    hazard_type: str = "water"  # water | ob | lateral_water | other
+    label: Optional[str] = None
+    latitude: float
+    longitude: float
+    radius_meters: Optional[float] = None
+
+
+class CourseHoleHazardResponse(BaseModel):
+    id: int
+    hazard_type: str
+    label: Optional[str]
+    latitude: Optional[float]
+    longitude: Optional[float]
+    radius_meters: Optional[float]
+
+    model_config = {"from_attributes": True}
+
+
 class CourseHoleBunkerCreate(BaseModel):
     label: Optional[str] = None
     front_latitude: float
@@ -59,6 +78,7 @@ class CourseHoleTemplateResponse(BaseModel):
     green_back_latitude: Optional[float]
     green_back_longitude: Optional[float]
     bunkers: list[CourseHoleBunkerResponse] = []
+    hazards: list[CourseHoleHazardResponse] = []
 
     model_config = {"from_attributes": True}
 

@@ -77,6 +77,12 @@ async def create_round(
             stroke_index=th.stroke_index if th and h.stroke_index is None else h.stroke_index,
             tee_latitude=th.tee_latitude if th else None,
             tee_longitude=th.tee_longitude if th else None,
+            green_front_latitude=th.green_front_latitude if th else None,
+            green_front_longitude=th.green_front_longitude if th else None,
+            green_middle_latitude=th.green_middle_latitude if th else None,
+            green_middle_longitude=th.green_middle_longitude if th else None,
+            green_back_latitude=th.green_back_latitude if th else None,
+            green_back_longitude=th.green_back_longitude if th else None,
         ))
 
     await db.flush()

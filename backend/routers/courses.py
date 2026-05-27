@@ -3,11 +3,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 from database import get_db
-from models.course import CourseTemplate, CourseHoleTemplate, CourseHoleBunker
+from models.course import CourseTemplate, CourseHoleTemplate, CourseHoleBunker, CourseHoleHazard
 from schemas.course import (
     CourseTemplateCreate, CourseTemplateResponse, CourseTemplateSummary,
     CourseHoleTemplateUpdate, CourseHoleTemplateResponse,
     CourseHoleBunkerCreate, CourseHoleBunkerUpdate, CourseHoleBunkerResponse,
+    CourseHoleHazardCreate, CourseHoleHazardResponse,
 )
 from auth.dependencies import get_current_superuser, get_current_user
 from models.user import User
@@ -16,7 +17,10 @@ router = APIRouter()
 
 
 def _hole_options():
-    return selectinload(CourseTemplate.holes).selectinload(CourseHoleTemplate.bunkers)
+    return selectinload(CourseTemplate.holes).options(
+        selectinload(CourseHoleTemplate.bunkers),
+        selectinload(CourseHoleTemplate.hazards),
+    )
 
 
 async def _get_course_or_404(course_id: int, db: AsyncSession) -> CourseTemplate:
@@ -38,7 +42,10 @@ async def _get_hole_or_404(course_id: int, hole_number: int, db: AsyncSession) -
             CourseHoleTemplate.course_id == course_id,
             CourseHoleTemplate.hole_number == hole_number,
         )
-        .options(selectinload(CourseHoleTemplate.bunkers))
+        .options(
+            selectinload(CourseHoleTemplate.bunkers),
+            selectinload(CourseHoleTemplate.hazards),
+        )
     )
     hole = result.scalar_one_or_none()
     if not hole:
@@ -180,6 +187,46 @@ async def delete_bunker(
     if not bunker:
         raise HTTPException(404, "Bunker not found")
     await db.delete(bunker)
+
+
+# ─── Hazard endpoints ────────────────────────────────────────────────────────
+
+@router.post("/{course_id}/holes/{hole_number}/hazards", response_model=CourseHoleHazardResponse, status_code=201)
+async def add_hazard(
+    course_id: int,
+    hole_number: int,
+    data: CourseHoleHazardCreate,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_superuser),
+):
+    hole = await _get_hole_or_404(course_id, hole_number, db)
+    hazard = CourseHoleHazard(
+        hole_id=hole.id,
+        hazard_type=data.hazard_type,
+        label=data.label,
+        latitude=data.latitude,
+        longitude=data.longitude,
+        radius_meters=data.radius_meters,
+    )
+    db.add(hazard)
+    await db.flush()
+    await db.refresh(hazard)
+    return hazard
+
+
+@router.delete("/{course_id}/holes/{hole_number}/hazards/{hazard_id}", status_code=204)
+async def delete_hazard(
+    course_id: int,
+    hole_number: int,
+    hazard_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_superuser),
+):
+    hole = await _get_hole_or_404(course_id, hole_number, db)
+    hazard = next((h for h in hole.hazards if h.id == hazard_id), None)
+    if not hazard:
+        raise HTTPException(404, "Hazard not found")
+    await db.delete(hazard)
 
 
 @router.delete("/{course_id}", status_code=204)

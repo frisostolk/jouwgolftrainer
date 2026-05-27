@@ -182,6 +182,12 @@ export interface RoundHole {
   pin_longitude: number | null;
   tee_latitude: number | null;
   tee_longitude: number | null;
+  green_front_latitude: number | null;
+  green_front_longitude: number | null;
+  green_middle_latitude: number | null;
+  green_middle_longitude: number | null;
+  green_back_latitude: number | null;
+  green_back_longitude: number | null;
   shots: Shot[];
 }
 
@@ -229,6 +235,17 @@ export interface CourseHoleBunker {
   back_longitude: number | null;
 }
 
+export type HazardType = "water" | "ob" | "lateral_water" | "other";
+
+export interface CourseHoleHazard {
+  id: number;
+  hazard_type: HazardType;
+  label: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  radius_meters: number | null;
+}
+
 export interface CourseHoleTemplate {
   id: number;
   hole_number: number;
@@ -244,6 +261,7 @@ export interface CourseHoleTemplate {
   green_back_latitude: number | null;
   green_back_longitude: number | null;
   bunkers: CourseHoleBunker[];
+  hazards: CourseHoleHazard[];
 }
 
 export interface CourseTemplate {

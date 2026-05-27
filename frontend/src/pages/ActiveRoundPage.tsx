@@ -1,12 +1,11 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { MapContainer, TileLayer, Polyline, Marker, useMap, useMapEvents } from "react-leaflet";
+import { MapContainer, TileLayer, Polyline, Marker, Circle, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import {
   ChevronLeft,
   ChevronRight,
-  Crosshair,
   Flag,
   Trash2,
   BarChart2,
@@ -15,8 +14,9 @@ import {
   MapPin,
 } from "lucide-react";
 import { useRound, useAddShot, useDeleteShot, useUpdateRound, useStrokeGained, useUpdateHole } from "../hooks/useRounds";
+import { useCourseLookup } from "../hooks/useCourses";
 import { useAuth } from "../context/AuthContext";
-import type { LieType, Shot } from "../types";
+import type { LieType, Shot, HazardType } from "../types";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -39,6 +39,13 @@ const LIE_COLORS: Record<LieType, string> = {
 };
 
 const LIE_ORDER: LieType[] = ["tee", "fairway", "rough", "bunker", "green", "penalty"];
+
+const HAZARD_COLORS: Record<HazardType, string> = {
+  water: "#3b82f6",
+  ob: "#ef4444",
+  lateral_water: "#f97316",
+  other: "#8b5cf6",
+};
 
 const CLUBS = [
   "Driver", "3-Wood", "5-Wood", "Hybrid",
@@ -104,30 +111,62 @@ function createGpsIcon() {
   });
 }
 
+function createGreenPointIcon(label: string) {
+  return L.divIcon({
+    html: `<div style="width:18px;height:18px;border-radius:50%;background:#22c55e;border:2px solid white;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;color:white;box-shadow:0 2px 4px rgba(0,0,0,0.4)">${label}</div>`,
+    className: "",
+    iconSize: [18, 18],
+    iconAnchor: [9, 9],
+  });
+}
+
+function haversineMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371000;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 function MapUpdater({
-  gpsCenter,
-  follow,
   holeCenter,
+  holeBoundsPoints,
 }: {
-  gpsCenter: [number, number] | null;
-  follow: boolean;
   holeCenter: [number, number] | null;
+  holeBoundsPoints: [number, number][];
 }) {
   const map = useMap();
-  // Store as a string key so value equality works across re-renders
-  const prevHoleKey = useRef<string | null>(null);
+  const prevKeyRef = useRef<string | null>(null);
+  // Keep refs so the effect always reads latest values
+  const holeCenterRef = useRef(holeCenter);
+  const holeBoundsRef = useRef(holeBoundsPoints);
+  holeCenterRef.current = holeCenter;
+  holeBoundsRef.current = holeBoundsPoints;
+
+  const key =
+    holeBoundsPoints.length >= 2
+      ? holeBoundsPoints.map((p) => `${p[0].toFixed(5)},${p[1].toFixed(5)}`).join("|")
+      : holeCenter
+      ? `${holeCenter[0].toFixed(5)},${holeCenter[1].toFixed(5)}`
+      : null;
 
   useEffect(() => {
-    if (follow && gpsCenter) {
-      map.setView(gpsCenter, Math.max(map.getZoom(), 17));
-    } else {
-      const key = holeCenter ? `${holeCenter[0]},${holeCenter[1]}` : null;
-      if (holeCenter && key !== prevHoleKey.current) {
-        prevHoleKey.current = key;
-        map.setView(holeCenter, Math.max(map.getZoom(), 18));
-      }
+    if (!key || key === prevKeyRef.current) return;
+    prevKeyRef.current = key;
+
+    const bp = holeBoundsRef.current;
+    const hc = holeCenterRef.current;
+
+    if (bp.length >= 2) {
+      const bounds = L.latLngBounds(bp.map((p) => L.latLng(p[0], p[1])));
+      map.fitBounds(bounds, { padding: [40, 40] });
+    } else if (hc) {
+      map.setView(hc, Math.max(map.getZoom(), 18));
     }
-  }, [gpsCenter, follow, holeCenter, map]);
+  }, [key, map]);
+
   return null;
 }
 
@@ -159,6 +198,7 @@ export function ActiveRoundPage() {
   const updateRound = useUpdateRound();
   const updateHole = useUpdateHole(roundId);
   const { data: sg } = useStrokeGained(roundId, round?.status === "completed");
+  const { data: courseTemplate } = useCourseLookup(round?.course_name);
   const { user } = useAuth();
   const isAdmin = user?.role === "admin" || user?.role === "superuser";
 
@@ -167,7 +207,6 @@ export function ActiveRoundPage() {
   const [selectedClub, setSelectedClub] = useState<string>("");
   const [gpsPos, setGpsPos] = useState<[number, number] | null>(null);
   const [gpsStatus, setGpsStatus] = useState<"acquiring" | "ok" | "denied" | "unavailable">("acquiring");
-  const [followGps, setFollowGps] = useState(false);
   const [satellite, setSatellite] = useState(true);
   // tapMode: null = normal, "fakeGps" = tap to set fake GPS, "setTee" = admin tap to set tee
   const [tapMode, setTapMode] = useState<null | "fakeGps" | "setTee">(null);
@@ -231,14 +270,34 @@ export function ActiveRoundPage() {
       ? [hole.tee_latitude, hole.tee_longitude]
       : null;
 
+  const greenFrontPos: [number, number] | null =
+    hole?.green_front_latitude != null && hole?.green_front_longitude != null
+      ? [hole.green_front_latitude, hole.green_front_longitude]
+      : null;
+  const greenMiddlePos: [number, number] | null =
+    hole?.green_middle_latitude != null && hole?.green_middle_longitude != null
+      ? [hole.green_middle_latitude, hole.green_middle_longitude]
+      : null;
+  const greenBackPos: [number, number] | null =
+    hole?.green_back_latitude != null && hole?.green_back_longitude != null
+      ? [hole.green_back_latitude, hole.green_back_longitude]
+      : null;
+
+  // Hazards from the course template for the current hole
+  const holeHazards = courseTemplate?.holes.find((h) => h.hole_number === currentHole)?.hazards ?? [];
+
+  // All hole points for fitBounds (tee + all green positions)
+  const holeBoundsPoints: [number, number][] = [
+    holeTeaCenter, greenFrontPos, greenMiddlePos, greenBackPos,
+  ].filter((p): p is [number, number] => p !== null);
+
   // effective GPS: fake (test mode) > real
   const effectiveGps = fakeGpsPos ?? gpsPos;
-  const mapCenter: [number, number] = effectiveGps ?? holeTeaCenter ?? [52.0, 4.3];
+  const mapCenter: [number, number] = holeTeaCenter ?? effectiveGps ?? [52.0, 4.3];
 
   function handleMapTap(lat: number, lng: number) {
     if (tapMode === "fakeGps") {
       setFakeGpsPos([lat, lng]);
-      setFollowGps(false);
     } else if (tapMode === "setTee" && isAdmin) {
       updateHole.mutate({ holeNumber: currentHole, data: { tee_latitude: lat, tee_longitude: lng } });
       setTapMode(null);
@@ -455,6 +514,28 @@ export function ActiveRoundPage() {
         </div>
       )}
 
+      {/* Distance to green row — shown when GPS available and green positions exist */}
+      {effectiveGps && (greenFrontPos || greenMiddlePos || greenBackPos) && (
+        <div className="bg-gray-800 border-t border-gray-700 px-4 py-1.5 flex items-center gap-4 flex-shrink-0">
+          <span className="text-gray-500 text-[11px] font-medium uppercase tracking-wide">To pin:</span>
+          {greenFrontPos && (
+            <span className="text-[12px] text-green-400 font-semibold">
+              F {Math.round(haversineMeters(effectiveGps[0], effectiveGps[1], greenFrontPos[0], greenFrontPos[1]))}m
+            </span>
+          )}
+          {greenMiddlePos && (
+            <span className="text-[12px] text-green-300 font-semibold">
+              M {Math.round(haversineMeters(effectiveGps[0], effectiveGps[1], greenMiddlePos[0], greenMiddlePos[1]))}m
+            </span>
+          )}
+          {greenBackPos && (
+            <span className="text-[12px] text-green-200 font-semibold">
+              B {Math.round(haversineMeters(effectiveGps[0], effectiveGps[1], greenBackPos[0], greenBackPos[1]))}m
+            </span>
+          )}
+        </div>
+      )}
+
       {/* Map — fixed vh height so Leaflet always gets a real pixel value */}
       <div className="relative flex-shrink-0" style={{ height: "45vh" }}>
         <MapContainer
@@ -469,8 +550,30 @@ export function ActiveRoundPage() {
           ) : (
             <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
           )}
-          <MapUpdater gpsCenter={gpsPos} follow={followGps} holeCenter={tapMode ? null : holeTeaCenter} />
+          <MapUpdater holeCenter={holeTeaCenter} holeBoundsPoints={holeBoundsPoints} />
           <MapTapHandler enabled={tapMode !== null} onTap={handleMapTap} />
+
+          {/* Tee to green line */}
+          {holeTeaCenter && (greenMiddlePos ?? greenFrontPos ?? greenBackPos) && (
+            <Polyline
+              positions={[holeTeaCenter, (greenMiddlePos ?? greenFrontPos ?? greenBackPos)!]}
+              pathOptions={{ color: "#ffffff", weight: 1.5, opacity: 0.35, dashArray: "5 5" }}
+            />
+          )}
+
+          {/* Hazard circles */}
+          {holeHazards.map((h) => {
+            if (h.latitude == null || h.longitude == null || h.radius_meters == null) return null;
+            const color = HAZARD_COLORS[h.hazard_type as HazardType] ?? "#8b5cf6";
+            return (
+              <Circle
+                key={h.id}
+                center={[h.latitude, h.longitude]}
+                radius={h.radius_meters}
+                pathOptions={{ color, fillColor: color, fillOpacity: 0.2, weight: 1.5 }}
+              />
+            );
+          })}
 
           {/* Shot path */}
           {shotPositions.length > 1 && (
@@ -496,6 +599,11 @@ export function ActiveRoundPage() {
             <Marker position={holeTeaCenter} icon={createTeeIcon()} />
           )}
 
+          {/* Green markers */}
+          {greenFrontPos && <Marker position={greenFrontPos} icon={createGreenPointIcon("F")} />}
+          {greenMiddlePos && <Marker position={greenMiddlePos} icon={createGreenPointIcon("M")} />}
+          {greenBackPos && <Marker position={greenBackPos} icon={createGreenPointIcon("B")} />}
+
           {/* Real GPS position (only when not overridden by fake) */}
           {gpsPos && !fakeGpsPos && (
             <Marker position={gpsPos} icon={createGpsIcon()} />
@@ -509,14 +617,6 @@ export function ActiveRoundPage() {
 
         {/* Map controls */}
         <div className="absolute bottom-3 right-3 z-[1000] flex flex-col gap-2">
-          <button
-            onClick={() => setFollowGps((f) => !f)}
-            className={`w-10 h-10 rounded-full flex items-center justify-center shadow-lg transition-colors ${
-              followGps ? "bg-blue-500 text-white" : "bg-white text-gray-600"
-            }`}
-          >
-            <Crosshair className="w-5 h-5" />
-          </button>
           <button
             onClick={() => setSatellite((s) => !s)}
             className={`w-10 h-10 rounded-full flex items-center justify-center shadow-lg transition-colors text-xs font-bold ${

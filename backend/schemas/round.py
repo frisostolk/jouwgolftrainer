@@ -69,6 +69,12 @@ class HoleResponse(BaseModel):
     pin_longitude: Optional[float]
     tee_latitude: Optional[float]
     tee_longitude: Optional[float]
+    green_front_latitude: Optional[float]
+    green_front_longitude: Optional[float]
+    green_middle_latitude: Optional[float]
+    green_middle_longitude: Optional[float]
+    green_back_latitude: Optional[float]
+    green_back_longitude: Optional[float]
     shots: list[ShotResponse]
 
 

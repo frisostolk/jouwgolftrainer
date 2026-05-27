@@ -43,6 +43,11 @@ class CourseHoleTemplate(TimestampMixin, Base):
         cascade="all, delete-orphan",
         order_by="CourseHoleBunker.id",
     )
+    hazards: Mapped[list["CourseHoleHazard"]] = relationship(
+        back_populates="hole",
+        cascade="all, delete-orphan",
+        order_by="CourseHoleHazard.id",
+    )
 
 
 class CourseHoleBunker(TimestampMixin, Base):
@@ -57,3 +62,17 @@ class CourseHoleBunker(TimestampMixin, Base):
     back_longitude: Mapped[float | None] = mapped_column(Float, default=None)
 
     hole: Mapped["CourseHoleTemplate"] = relationship(back_populates="bunkers")
+
+
+class CourseHoleHazard(TimestampMixin, Base):
+    __tablename__ = "course_hole_hazards"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    hole_id: Mapped[int] = mapped_column(ForeignKey("course_hole_templates.id", ondelete="CASCADE"))
+    hazard_type: Mapped[str] = mapped_column(String(20), default="water")  # water|ob|lateral_water|other
+    label: Mapped[str | None] = mapped_column(String(100), default=None)
+    latitude: Mapped[float | None] = mapped_column(Float, default=None)
+    longitude: Mapped[float | None] = mapped_column(Float, default=None)
+    radius_meters: Mapped[float | None] = mapped_column(Float, default=None)
+
+    hole: Mapped["CourseHoleTemplate"] = relationship(back_populates="hazards")

@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { coursesApi, type CourseHoleUpdate, type BunkerCreate } from "../api/courses";
+import { coursesApi, type CourseHoleUpdate, type BunkerCreate, type HazardCreate } from "../api/courses";
 
 export function useCourses() {
   return useQuery({ queryKey: ["courses"], queryFn: coursesApi.list });
@@ -10,6 +10,15 @@ export function useCourse(id: number) {
     queryKey: ["courses", id],
     queryFn: () => coursesApi.get(id),
     enabled: !!id,
+  });
+}
+
+export function useCourseLookup(name: string | undefined) {
+  return useQuery({
+    queryKey: ["courses", "lookup", name],
+    queryFn: () => coursesApi.lookup(name!),
+    enabled: !!name,
+    staleTime: 5 * 60 * 1000,
   });
 }
 
@@ -53,6 +62,24 @@ export function useDeleteBunker(courseId: number) {
   return useMutation({
     mutationFn: ({ holeNumber, bunkerId }: { holeNumber: number; bunkerId: number }) =>
       coursesApi.deleteBunker(courseId, holeNumber, bunkerId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["courses", courseId] }),
+  });
+}
+
+export function useAddHazard(courseId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ holeNumber, data }: { holeNumber: number; data: HazardCreate }) =>
+      coursesApi.addHazard(courseId, holeNumber, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["courses", courseId] }),
+  });
+}
+
+export function useDeleteHazard(courseId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ holeNumber, hazardId }: { holeNumber: number; hazardId: number }) =>
+      coursesApi.deleteHazard(courseId, holeNumber, hazardId),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["courses", courseId] }),
   });
 }

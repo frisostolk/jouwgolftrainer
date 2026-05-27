@@ -1,5 +1,5 @@
 import api from "./client";
-import type { CourseTemplate, CourseTemplateSummary, CourseHoleBunker } from "../types";
+import type { CourseTemplate, CourseTemplateSummary, CourseHoleBunker, CourseHoleHazard, HazardType } from "../types";
 
 export interface CourseHoleUpdate {
   par?: number;
@@ -23,6 +23,14 @@ export interface BunkerCreate {
   back_longitude: number;
 }
 
+export interface HazardCreate {
+  hazard_type: HazardType;
+  label?: string | null;
+  latitude: number;
+  longitude: number;
+  radius_meters?: number | null;
+}
+
 export const coursesApi = {
   list: () => api.get<CourseTemplateSummary[]>("/courses").then((r) => r.data),
   get: (id: number) => api.get<CourseTemplate>(`/courses/${id}`).then((r) => r.data),
@@ -35,6 +43,10 @@ export const coursesApi = {
     api.post<CourseHoleBunker>(`/courses/${courseId}/holes/${holeNumber}/bunkers`, data).then((r) => r.data),
   deleteBunker: (courseId: number, holeNumber: number, bunkerId: number) =>
     api.delete(`/courses/${courseId}/holes/${holeNumber}/bunkers/${bunkerId}`),
+  addHazard: (courseId: number, holeNumber: number, data: HazardCreate) =>
+    api.post<CourseHoleHazard>(`/courses/${courseId}/holes/${holeNumber}/hazards`, data).then((r) => r.data),
+  deleteHazard: (courseId: number, holeNumber: number, hazardId: number) =>
+    api.delete(`/courses/${courseId}/holes/${holeNumber}/hazards/${hazardId}`),
   lookup: (name: string) =>
     api.get<CourseTemplate>(`/courses/lookup`, { params: { name } }).then((r) => r.data),
 };
