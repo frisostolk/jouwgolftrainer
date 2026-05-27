@@ -171,24 +171,24 @@ function MapUpdater({
     if (bp.length >= 2) {
       const bounds = L.latLngBounds(bp.map((p) => L.latLng(p[0], p[1])));
 
-      // Orientation-aware padding: push tee toward the viewport bottom.
-      // In Mercator, north = screen top.  For a north-going hole (green north of tee)
-      // adding more top-pad and less bottom-pad shifts the usable area downward so
-      // the tee (southern point) lands near the bottom edge of the viewport.
       let padTop = 40, padBottom = 40;
       if (tee && green) {
-        const dlat = green[0] - tee[0]; // positive = green is north of tee
+        const dlat = green[0] - tee[0];
         const dlng = (green[1] - tee[1]) * Math.cos((tee[0] * Math.PI) / 180);
         const nsFraction = Math.abs(dlat) / (Math.abs(dlat) + Math.abs(dlng) + 1e-9);
         if (dlat > 0) {
-          // Green is north: apply asymmetric padding weighted by north-south fraction
-          padTop = Math.round(40 + 50 * nsFraction);   // up to 90
-          padBottom = Math.round(40 - 25 * nsFraction); // down to 15
+          padTop = Math.round(40 + 50 * nsFraction);
+          padBottom = Math.round(40 - 25 * nsFraction);
         } else if (dlat < 0) {
-          // Green is south: mirror — add padding at bottom so green ends up near viewport bottom
           padTop = Math.round(40 - 25 * nsFraction);
           padBottom = Math.round(40 + 50 * nsFraction);
         }
+        console.log("[MapUpdater] tee:", tee, "green:", green);
+        console.log("[MapUpdater] dlat:", dlat.toFixed(6), "dlng:", dlng.toFixed(6));
+        console.log("[MapUpdater] nsFraction:", nsFraction.toFixed(3), "→ padTop:", padTop, "padBottom:", padBottom);
+        console.log("[MapUpdater] map size:", map.getSize(), "bounds:", bounds.toBBoxString());
+      } else {
+        console.log("[MapUpdater] tee or green missing — tee:", tee, "green:", green, "using symmetric padding");
       }
 
       map.fitBounds(bounds, {
@@ -589,6 +589,11 @@ export function ActiveRoundPage() {
             teePos={holeTeaCenter}
             greenRefPos={greenMiddlePos ?? greenFrontPos ?? greenBackPos}
           />
+          {/* DEBUG — remove after orientation is confirmed */}
+          {typeof window !== "undefined" && (() => {
+            console.log("[ActiveRound] holeTeaCenter:", holeTeaCenter, "greenMiddlePos:", greenMiddlePos, "greenFrontPos:", greenFrontPos, "holeBoundsPoints:", holeBoundsPoints);
+            return null;
+          })()}
           <MapTapHandler enabled={tapMode !== null} onTap={handleMapTap} />
 
           {/* Tee to green line */}
